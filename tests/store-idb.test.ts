@@ -144,4 +144,80 @@ describe("the worker's saves", () => {
     // fresh was not honoured and nothing was saved: the other tab's estate stands
     expect(await dayOf(6)).toBe(1);
   });
+
+  it("keeps the crash mark through reloads until a day past it is saved", async () => {
+    await send({ type: "open", seed: 8, fresh: true });
+    vi.advanceTimersByTime(0); // day 2
+    await send({ type: "flush" });
+    await send({ type: "api", method: "POST", path: "/api/control", body: '{"step":1}' });
+    boom.on = true;
+    vi.advanceTimersByTime(100); // day 3 throws
+    await settle();
+    boom.on = false;
+    for (let reload = 0; reload < 2; reload++) {
+      expect(await send({ type: "open", seed: 8 })).toMatchObject({ type: "opened", day: 2, crashed: 3 });
+      expect(await store.load(8)).toMatchObject({ crashed: 3 });
+    }
+    await send({ type: "api", method: "POST", path: "/api/control", body: '{"step":1}' });
+    vi.advanceTimersByTime(100); // day 3 goes through this time
+    await send({ type: "flush" });
+    const after = await store.load(8);
+    expect(after?.state.world.day).toBe(3);
+    expect(after).not.toHaveProperty("crashed");
+  });
+
+  it("neither runs nor saves over a save that has a run's shape but cannot be run", async () => {
+    const s = plant(9);
+    step(s);
+    const rid = Object.keys(s.world.residents)[0]!;
+    const bad = { ...s, world: { ...s.world, residents: { ...s.world.residents, [rid]: null } } };
+    expect(store.looksLikeRun(bad, 9)).toBe(true);
+    await rawPut({ seed: 9, format: store.FORMAT, rules: store.RULES, saved: 0, state: bad });
+    const o = await send({ type: "open", seed: 9 });
+    expect(o).toMatchObject({ type: "opened", seed: 9, day: 2, resumed: false, saving: false });
+    expect((o as { broken?: string }).broken).toMatch(/answers 500|throws/);
+    expect(await send({ type: "api", method: "GET", path: "/api/state", body: null })).toMatchObject({ status: 503 });
+    await send({ type: "flush" });
+    expect((await store.load(9))?.state.world.residents[rid]).toBeNull();
+    // "start over" is the way on
+    expect(await send({ type: "open", seed: 9, fresh: true })).toMatchObject({ type: "opened", day: 1, saving: true });
+  });
+
+  it("meets a save whose next day throws with start over, not a crash on every reload", async () => {
+    await send({ type: "open", seed: 10, fresh: true });
+    await send({ type: "flush" });
+    boom.on = true;
+    expect(await send({ type: "open", seed: 10 })).toMatchObject({ type: "opened", resumed: false, broken: "day 2 throws: boom" });
+    boom.on = false;
+    expect(await send({ type: "open", seed: 10 })).toMatchObject({ type: "opened", resumed: true, day: 1 });
+  });
+
+  it("saves again after an open that could not hold the seed", async () => {
+    vi.stubGlobal("navigator", { locks: { request: (_n: string, _o: object, cb: (l: null) => unknown) => Promise.resolve(cb(null)) } });
+    await send({ type: "open", seed: 15, fresh: true });
+    await send({ type: "flush" }); // nothing to do: not held
+    vi.unstubAllGlobals();
+    await send({ type: "open", seed: 15, fresh: true });
+    vi.advanceTimersByTime(0); // day 2
+    await send({ type: "flush" });
+    expect(await dayOf(15)).toBe(2);
+  });
+});
+
+describe("a newer page", () => {
+  it("is not blocked by this one: the store steps aside on versionchange", async () => {
+    expect(await store.available()).toBe(true);
+    const blocked = vi.fn();
+    const v2 = await new Promise<IDBDatabase>((done, fail) => {
+      const rq = indexedDB.open("highfield", 2);
+      rq.onblocked = blocked;
+      rq.onsuccess = () => done(rq.result);
+      rq.onerror = () => fail(rq.error);
+    });
+    expect(blocked).not.toHaveBeenCalled();
+    expect(v2.version).toBe(2);
+    v2.close();
+    // the old page's store now finds a database newer than it: no storage, not a hang
+    expect(await store.save(plant(14))).toEqual({ ok: false, why: "no storage here" });
+  });
 });

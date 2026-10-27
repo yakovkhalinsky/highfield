@@ -35,12 +35,20 @@ worker.onmessage = (ev: MessageEvent<FromWorker>) => {
   else w.ok(m);
 };
 
-/** Say on the page that the estate stopped, the way page3d says it has no WebGL. */
+/**
+ * Say on the page that the estate stopped, the way page3d says it has no
+ * WebGL. The overlay covers the HUD, so the seed row moves onto it: "start
+ * over" stays in reach. There is no estate to show in glyphs.
+ */
 function stopped(why: string): void {
   console.error("estate worker:", why);
   const box = document.getElementById("nogl");
   const text = document.getElementById("noglWhy");
+  const panel = box?.querySelector(".noglbox");
+  const row = document.querySelector(".seedrow");
   if (text) text.textContent = why;
+  box?.querySelectorAll<HTMLElement>(".noglhint, #plain").forEach((el) => { el.hidden = true; });
+  if (panel && row && !panel.contains(row)) panel.append(row);
   if (box) box.hidden = false;
 }
 
@@ -92,8 +100,10 @@ function seedControls(o: Opened): void {
   const input = $<HTMLInputElement>("seedIn");
   const note = $("seedNote");
   if (input) input.value = String(o.seed);
-  opened = o.crashed !== undefined
-    ? `stopped on day ${o.crashed.toLocaleString("en-AU")} last time and will stop there again; "start over" plants it afresh`
+  opened = o.broken !== undefined
+    ? `its save cannot be run (${o.broken}); "start over" plants it afresh`
+    : o.crashed !== undefined
+    ? `stopped on day ${o.crashed.toLocaleString("en-AU")} last time; if it stops there again, "start over" plants it afresh`
     : o.resumed ? `resumed at day ${o.day.toLocaleString("en-AU")}` : "planted";
   savingNote(o.saving, o.why);
   const go = (fresh: boolean) => {
@@ -131,6 +141,10 @@ async function boot(): Promise<void> {
     history.replaceState(null, "", `${location.pathname}?${params}${location.hash}`);
   }
   seedControls(r);
+  if (r.broken !== undefined) {
+    stopped(`estate ${r.seed}'s save cannot be run: ${r.broken}`);
+    return;
+  }
   // Best effort only: the worker already saves after every day and every
   // control, and a page going away cannot wait for the flush to finish.
   addEventListener("pagehide", () => void ask({ type: "flush" }));

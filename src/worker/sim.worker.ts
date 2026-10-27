@@ -28,6 +28,8 @@ let dirty = false;
 /** this tab holds the seed's lock; a second tab on the seed runs but never saves */
 let held = false;
 let release: (() => void) | null = null;
+/** the day this estate stopped on before (its save's crash mark), until a day past it is saved */
+let crashedAt: number | undefined;
 /** what the last save came to, so the page hears only when it changes */
 let lastSave: store.Saved = { ok: true };
 
@@ -35,21 +37,25 @@ function post(m: FromWorker): void {
   self.postMessage(m);
 }
 
-/** Save now, or once the save in hand is done; saves never overlap. */
+/**
+ * Save now, or once the save in hand is done; saves never overlap. `saving`
+ * is cleared in a finally, after it is set: cleared inside, a loop with
+ * nothing to do (no state, not held) would clear it before it was set and
+ * leave a settled promise that every later persist() returned unsaved.
+ */
 function persist(): Promise<void> {
   dirty = true;
   if (saving) return saving;
   saving = (async () => {
     while (dirty && state && held) {
       dirty = false;
-      const r = await store.save(state);
+      const r = await store.save(state, crashedAt);
       if (r.ok !== lastSave.ok || (!r.ok && !lastSave.ok && r.why !== lastSave.why)) {
         lastSave = r;
         post({ type: "saving", id: null, ok: r.ok, why: r.ok ? "" : r.why });
       }
     }
-    saving = null;
-  })();
+  })().finally(() => { saving = null; });
   return saving;
 }
 
@@ -60,10 +66,18 @@ async function open(seed: number | null, fresh: boolean) {
   held = release !== null;
   if (fresh && held) await store.forget(s);
   const saved = fresh ? undefined : await store.load(s);
-  state = saved?.state ?? plant(s);
   queued.step = 0;
+  clearTimeout(timer);
+  const broken = saved && fault(saved.state);
+  if (saved && broken) {
+    // not run, and not saved over: the save stays as it was until "start over"
+    state = null;
+    return { seed: s, day: saved.state.world.day, resumed: false, saving: false, why: "it cannot be run", broken };
+  }
+  state = saved?.state ?? plant(s);
+  crashedAt = saved?.crashed;
   dirty = true;
-  lastSave = held ? await store.save(state) : { ok: false, why: "open in another tab" };
+  lastSave = held ? await store.save(state, crashedAt) : { ok: false, why: "open in another tab" };
   dirty = false;
   // A new estate has its first day at once, as web.py's runner does on
   // start; a resumed one waits its pace, so a reload is not a day.
@@ -73,6 +87,31 @@ async function open(seed: number | null, fresh: boolean) {
     saving: lastSave.ok, why: lastSave.ok ? "" : lastSave.why,
     ...(saved?.crashed !== undefined ? { crashed: saved.crashed } : {}),
   };
+}
+
+const said = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+/**
+ * Why a save that has the shape of a run still cannot be run, or null. Shape
+ * is not soundness (a resident set to null passes it), so before resuming,
+ * page3d's three reads are answered and the next day is ticked on a copy:
+ * a save that would crash on every reload is met with "start over" instead.
+ */
+export function fault(s: RunState): string | null {
+  for (const path of ["/api/ground", "/api/state", "/api/plain"]) {
+    try {
+      const r = respond(s, { step: 0 }, "GET", path, null);
+      if (r.status !== 200) return `${path} answers ${r.status}`;
+    } catch (e) {
+      return `${path} throws: ${said(e)}`;
+    }
+  }
+  try {
+    step(structuredClone(s));
+  } catch (e) {
+    return `day ${s.world.day + 1} throws: ${said(e)}`;
+  }
+  return null;
 }
 
 function schedule(now = false): void {
@@ -105,9 +144,10 @@ function beat(): void {
       queued.step = 0;
       clearTimeout(timer);
       timer = undefined;
-      post({ type: "error", id: null, message: `the estate stopped: ${e instanceof Error ? e.message : String(e)}` });
+      post({ type: "error", id: null, message: `the estate stopped: ${said(e)}` });
       return;
     }
+    if (crashedAt !== undefined && state.world.day >= crashedAt) crashedAt = undefined;
     void persist();
   }
   schedule();

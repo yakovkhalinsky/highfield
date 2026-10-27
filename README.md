@@ -76,10 +76,15 @@ this browser", or "not saved" and why (IndexedDB unavailable, as in some
 private windows; storage full; or the seed already open in another tab,
 which alone holds it). The estate runs either way. A save from an older
 format or older rules, or one that doesn't have the shape of a run, is
-never half-loaded: that seed is planted again instead. If the estate
-stopped with an error last time, the page says on opening which day it
-stopped on and that it will stop there again, and that "start over" plants
-it afresh.
+never half-loaded: that seed is planted again instead. A save that has the
+shape of a run but can't be run (a resident gone to `null`, say) is caught
+on opening: the worker answers the page's three reads from it and runs its
+next day on a copy, and if any of that fails the estate isn't run and the
+save isn't written over. The page says why, with the seed row on the notice
+so "start over" can still be clicked. If the estate stopped with an error
+last time, the page says on opening which day it stopped on, and that if it
+stops there again "start over" plants it afresh. That mark stays on the
+save across reloads until a day past it has been saved.
 
 ## Words without a model
 
