@@ -136,10 +136,15 @@ export async function load(seed: number): Promise<Loaded | undefined> {
   return isDay(v.crashed) ? { state: v.state, crashed: v.crashed } : { state: v.state };
 }
 
-/** Save the estate and mark it the one last open, in one transaction. */
-export async function save(state: RunState): Promise<Saved> {
+/**
+ * Save the estate and mark it the one last open, in one transaction. A
+ * crash mark (`crashed`, the day that threw) is carried until a day past it
+ * is saved, so reloading a crashed estate does not forget it stopped.
+ */
+export async function save(state: RunState, crashed?: number): Promise<Saved> {
   const seed = state.world.seed;
   const rec: Save = { seed, format: FORMAT, rules: RULES, saved: Date.now(), state };
+  if (isDay(crashed) && state.world.day < crashed!) rec.crashed = crashed;
   const r = await run([ESTATES, META], "readwrite", (tx) => {
     tx.objectStore(ESTATES).put(rec);
     tx.objectStore(META).put(seed, "last");

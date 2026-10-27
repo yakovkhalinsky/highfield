@@ -17,6 +17,8 @@ export interface Opened {
   saving: boolean; why: string;
   /** the day this saved estate stopped on last time, if it did */
   crashed?: number;
+  /** why its save cannot be run (it was neither run nor saved over), if so */
+  broken?: string;
 }
 
 export type FromWorker =
