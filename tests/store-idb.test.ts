@@ -18,6 +18,22 @@ vi.mock("../src/view/runner.ts", async (orig) => {
   return { ...real, step: (s: RunState) => { real.step(s); if (boom.on) throw new Error("boom"); } };
 });
 
+/** a read that answers 500 (or throws) while its path is set, the others as ever */
+const sick = { path: "", throws: false };
+vi.mock("../src/view/api.ts", async (orig) => {
+  const real = await orig<typeof import("../src/view/api.ts")>();
+  return {
+    ...real,
+    respond: (...a: Parameters<typeof real.respond>) => {
+      if (a[2] === "GET" && a[3] === sick.path) {
+        if (sick.throws) throw new Error("sick");
+        return { status: 500, contentType: "text/plain", body: "sick" };
+      }
+      return real.respond(...a);
+    },
+  };
+});
+
 const posted: FromWorker[] = [];
 const self = { postMessage: (m: FromWorker) => posted.push(m), onmessage: null as null | ((e: { data: unknown }) => unknown) };
 let nextId = 1;
@@ -46,7 +62,7 @@ beforeAll(async () => {
   (globalThis as { self?: unknown }).self = self;
   await import("../src/worker/sim.worker.ts");
 });
-afterEach(() => { boom.on = false; vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+afterEach(() => { boom.on = false; sick.path = ""; sick.throws = false; vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe("the store", () => {
   it("resumes its own save, and refuses another format, other rules, the wrong seed or a broken shape", async () => {
@@ -156,6 +172,7 @@ describe("the worker's saves", () => {
     boom.on = false;
     for (let reload = 0; reload < 2; reload++) {
       expect(await send({ type: "open", seed: 8 })).toMatchObject({ type: "opened", day: 2, crashed: 3 });
+      await send({ type: "flush" }); // the page closing saves what it has
       expect(await store.load(8)).toMatchObject({ crashed: 3 });
     }
     await send({ type: "api", method: "POST", path: "/api/control", body: '{"step":1}' });
@@ -181,6 +198,24 @@ describe("the worker's saves", () => {
     expect((await store.load(9))?.state.world.residents[rid]).toBeNull();
     // "start over" is the way on
     expect(await send({ type: "open", seed: 9, fresh: true })).toMatchObject({ type: "opened", day: 1, saving: true });
+  });
+
+  it("catches a save where only one of the three reads fails", async () => {
+    await send({ type: "open", seed: 16, fresh: true });
+    await send({ type: "flush" });
+    const saved = await store.load(16);
+    for (const path of ["/api/ground", "/api/state", "/api/plain"]) {
+      for (const throws of [false, true]) {
+        sick.path = path;
+        sick.throws = throws;
+        const why = throws ? `${path} throws: sick` : `${path} answers 500`;
+        expect(await send({ type: "open", seed: 16 }), why).toMatchObject({ type: "opened", resumed: false, saving: false, broken: why });
+        await send({ type: "flush" });
+        expect(await store.load(16), why).toEqual(saved);
+      }
+    }
+    sick.path = "";
+    expect(await send({ type: "open", seed: 16 })).toMatchObject({ type: "opened", resumed: true, day: 1 });
   });
 
   it("meets a save whose next day throws with start over, not a crash on every reload", async () => {

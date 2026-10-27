@@ -40,9 +40,12 @@ worker.onmessage = (ev: MessageEvent<FromWorker>) => {
  * WebGL. The overlay covers the HUD, so the seed row moves onto it: "start
  * over" stays in reach. There is no estate to show in glyphs.
  */
-function stopped(why: string): void {
+function stopped(why: string, heading = "the estate stopped"): void {
   console.error("estate worker:", why);
   const box = document.getElementById("nogl");
+  // the vendored page's heading is the viewer's own ("the 3D view cannot start")
+  const h = box?.querySelector("h3");
+  if (h) h.textContent = heading;
   const text = document.getElementById("noglWhy");
   const panel = box?.querySelector(".noglbox");
   const row = document.querySelector(".seedrow");
@@ -142,7 +145,7 @@ async function boot(): Promise<void> {
   }
   seedControls(r);
   if (r.broken !== undefined) {
-    stopped(`estate ${r.seed}'s save cannot be run: ${r.broken}`);
+    stopped(`estate ${r.seed}'s save cannot be run: ${r.broken}`, "this save cannot be run");
     return;
   }
   // Best effort only: the worker already saves after every day and every
@@ -156,5 +159,5 @@ async function boot(): Promise<void> {
 }
 
 boot().catch((e: unknown) => {
-  stopped(`the estate could not open: ${e instanceof Error ? e.message : String(e)}`);
+  stopped(`the estate could not open: ${e instanceof Error ? e.message : String(e)}`, "the estate could not open");
 });
