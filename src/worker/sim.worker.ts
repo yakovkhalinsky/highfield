@@ -98,16 +98,18 @@ const said = (e: unknown) => (e instanceof Error ? e.message : String(e));
  * a save that would crash on every reload is met with "start over" instead.
  */
 export function fault(s: RunState): string | null {
+  // one copy for the reads and the day: whatever they touch, the save does not
+  const c = structuredClone(s);
   for (const path of ["/api/ground", "/api/state", "/api/plain"]) {
     try {
-      const r = respond(s, { step: 0 }, "GET", path, null);
+      const r = respond(c, { step: 0 }, "GET", path, null);
       if (r.status !== 200) return `${path} answers ${r.status}`;
     } catch (e) {
       return `${path} throws: ${said(e)}`;
     }
   }
   try {
-    step(structuredClone(s));
+    step(c);
   } catch (e) {
     return `day ${s.world.day + 1} throws: ${said(e)}`;
   }
