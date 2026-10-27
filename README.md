@@ -1,17 +1,22 @@
-# estate-web: Highfield in the browser
+# Highfield
 
-A TypeScript port of [`apps/estate`](../estate) that runs entirely in the
-browser. There's no server and no model. The simulation runs in a Web
-Worker, the estate is saved in IndexedDB, and the whole app is a static
-build that GitHub Pages (or any static host) can serve from a sub-path.
+**Play it: <https://yakov.khalinsky.com/highfield/>**
+
+A housing estate that lives in your browser. Highfield is a TypeScript port
+of the estate from [llm-world](https://github.com/yakovkhalinsky/llm-world)
+([`apps/estate`](https://github.com/yakovkhalinsky/llm-world/tree/main/apps/estate)),
+and runs with no server and no model. The simulation runs in a Web Worker,
+the estate is saved in IndexedDB, and the whole app is a static build that
+GitHub Pages (or any static host) can serve from a sub-path. From the same
+seed it grows the same estate as the Python engine, hash for hash.
 
 <p align="center">
-  <img src="../../docs/screenshots/estate-web-overview.webp" width="800" alt="Highfield in the browser, day 72, afternoon, the chronicle open">
+  <img src="docs/screenshots/estate-web-overview.webp" width="800" alt="Highfield in the browser, day 72, afternoon, the chronicle open">
 </p>
 <table>
   <tr>
-    <td align="center"><img src="../../docs/screenshots/estate-web-night.webp" width="400" alt="Highfield at night in the browser, lit windows and lamps"><br>night: the same gradual day as the Python app's view</td>
-    <td align="center"><img src="../../docs/screenshots/estate-web-card.webp" width="400" alt="Elm Block's card: floors, flats lived in, households"><br>a block's card, only what is relevant to it</td>
+    <td align="center"><img src="docs/screenshots/estate-web-night.webp" width="400" alt="Highfield at night in the browser, lit windows and lamps"><br>night: the same gradual day as the Python app's view</td>
+    <td align="center"><img src="docs/screenshots/estate-web-card.webp" width="400" alt="Elm Block's card: floors, flats lived in, households"><br>a block's card, only what is relevant to it</td>
   </tr>
 </table>
 
@@ -23,7 +28,9 @@ npm run build     # typecheck, then the static site in dist/
 npm run preview   # serve dist/ as it will be served
 ```
 
-`npm test` and `npm run parity` need `python3` (3.12 or later) on your PATH.
+`npm test` and `npm run parity` need `python3` (3.12 or later) and `git` on
+your PATH: they first fetch the Python reference (below) into
+`.reference/llm-world`.
 Nothing else does: the page itself needs only a browser with Web Workers
 (and WebGL for the 3D view; without it the page falls back to page3d's
 plain-text frame).
@@ -39,9 +46,11 @@ plain-text frame).
 | [`src/worker`](src/worker) | the Web Worker that holds the estate, keeps its pace and saves it to IndexedDB after every day. |
 | [`src/main.ts`](src/main.ts) | the page: it answers page3d's `fetch('/api/…')` calls from the worker, then starts page3d's viewer. |
 
-**The page is the Python app's page.** The 3D front end is
-`apps/estate/estate/page3d` and `apps/shared/page3d`, reused byte for byte
-and never forked. [`vite.config.ts`](vite.config.ts) serves those files at
+**The page is the Python app's page.** The 3D front end is llm-world's
+`apps/estate/estate/page3d` and `apps/shared/page3d`, vendored byte for byte
+into [`page3d/estate`](page3d/estate) and [`page3d/shared`](page3d/shared)
+and never forked: `npm run sync:page3d` copies them from the pinned
+llm-world commit, and `tests/vendor.test.ts` fails on any difference. [`vite.config.ts`](vite.config.ts) serves those files at
 `3d/` in dev and copies them in the build. It also rewrites `index.html`:
 the paths become relative, the seed row is added, and `src/main.ts` stands
 in for `viewer.js`. Each rewrite fails the build if page3d's page has
@@ -91,7 +100,7 @@ a year of three seeds:
   sold-out shop and count of errands or wet days is read off that stretch's
   events and day books. If a fact isn't there, no template can say it.
 - **Nobody invented.** The only people named are residents in the
-  stretch's events or residents fraying right now.
+  stretch's or the last week's events, or residents fraying right now.
 - **No repeats.** Recently used templates are held back while others fit
   (the why's and the chronicle's are remembered apart).
   No chronicle entry is word for word one the estate still keeps.
@@ -108,33 +117,54 @@ The world never reads these words. The templates draw from generators of
 their own (`rngFor(seed, day, "chronicle")`), so they never change the
 estate they describe. The HUD says so: "AI off · seeded templates".
 
-## Deploying to GitHub Pages
+## Deploying
 
 The build uses relative paths throughout (`base: "./"`), so `dist/` works at
-the root of a domain or under a sub-path such as
-`https://<user>.github.io/llm-world/`. There is nothing to configure.
+the root of a domain or under any sub-path. There is nothing to configure.
 
 ```sh
 npm ci && npm run build      # dist/ is the whole site
 ```
 
-Then publish `dist/` in either of these ways:
+[`.github/workflows/pages.yml`](.github/workflows/pages.yml) publishes it on
+every push to `main`: it runs `npm test` (the parity bar) and the build,
+then hands `dist/` to `actions/deploy-pages`. The deploy job runs only
+on `main`, in the `github-pages` environment, whose branch policy allows
+only `main`. As a project site of the
+`yakovkhalinsky` user site, it is served at
+<https://yakov.khalinsky.com/highfield/>.
 
-- **From Actions.** Set Settings → Pages → Source to "GitHub Actions" and
-  add a workflow that builds `apps/estate-web` and runs
-  `actions/upload-pages-artifact` (path `apps/estate-web/dist`), then
-  `actions/deploy-pages`.
-- **From a branch.** Push the contents of `dist/` to a `gh-pages` branch
-  and choose that branch as the Pages source.
-
-This repo doesn't deploy it for you; that step is left to whoever owns the
-Pages site. To check a build the way Pages serves it, serve its parent
-under the sub-path:
+To check a build the way Pages serves it, serve its parent under the
+sub-path:
 
 ```sh
-mkdir -p /tmp/pages && ln -sfn "$PWD/dist" /tmp/pages/llm-world
-python3 -m http.server 4185 -d /tmp/pages   # open http://localhost:4185/llm-world/
+mkdir -p /tmp/pages && ln -sfn "$PWD/dist" /tmp/pages/highfield
+python3 -m http.server 4185 -d /tmp/pages   # open http://localhost:4185/highfield/
 ```
+
+**Saves belong to the origin, not the path.** IndexedDB, the Web Lock names
+and the last seed are keyed to `yakov.khalinsky.com`, which every project
+site there shares, so any page on it can write Highfield's save. That is why
+a save's format, rules and shape are checked before it is resumed.
+
+## The reference: llm-world, pinned
+
+The Python estate stays in llm-world, the one source of truth for the rules
+and the engine. [`reference.json`](reference.json) pins the llm-world commit
+this port is held to, and both the parity tests and the vendored page3d come
+from that commit:
+
+- `npm run reference` fetches it (only `apps/estate` and `apps/shared`, one
+  commit deep) into `.reference/llm-world`. `npm test`, `npm run parity` and
+  `npm run rules` do this first. CI checks it out there itself.
+- `LLM_WORLD=/path/to/llm-world npm test` uses a checkout of your own
+  instead.
+- Once a week, and by hand, CI's `full` job runs the whole bar, the
+  three-year balance fingerprint included, against the pinned commit and
+  against llm-world's `main`. A red `main` run means llm-world has moved on.
+  To follow it, set the new sha in `reference.json`, then run
+  `npm run reference && npm run sync:page3d && npm run rules`, then
+  `npm test`, and commit them together.
 
 ## The bar: same seed, same estate
 
@@ -147,8 +177,9 @@ npm test          # the shims against CPython, rules.json freshness, and gen par
 npm run parity    # Python vs TS world hashes, seeds 1-8, 42 and 3771
 ```
 
-Run `npm test` and `npm run parity` from this folder, with `python3` (3.12
-or later) on your PATH. They call [`../estate/tools/parity.py`](../estate/tools/parity.py),
+Run `npm test` and `npm run parity` with `python3` (3.12 or later) on your
+PATH. They call llm-world's
+[`apps/estate/tools/parity.py`](https://github.com/yakovkhalinsky/llm-world/blob/main/apps/estate/tools/parity.py),
 a read-only hook that plants worlds in memory and prints:
 
 - each world's canonical hash; and
@@ -190,3 +221,7 @@ the engine reads.
 `npm run rules` uses POSIX shell syntax (`${PYTHON:-python3}`, `mv`), so on
 Windows run it from Git Bash or WSL rather than cmd; everything else is
 plain Node.
+
+## License
+
+MIT, as llm-world is. See [LICENSE](LICENSE).

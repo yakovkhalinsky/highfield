@@ -4,16 +4,18 @@ import type { Plugin } from "vite";
 import { defineConfig } from "vitest/config";
 
 /**
- * The 3D front end is apps/estate's own page3d, reused byte for byte: the
- * estate's viewer, HUD and scene, then what it shares with the grove
- * (apps/shared/page3d, three.js vendored). They are served at `3d/` in dev
- * and copied there in the build — never forked into this app, so a fix to
- * the Python app's page is a fix here too. The estate's folder wins a
+ * The 3D front end is llm-world's apps/estate page3d, vendored byte for
+ * byte into page3d/estate: the estate's viewer, HUD and scene, then what
+ * it shares with the grove (apps/shared/page3d, three.js vendored) in
+ * page3d/shared. They are served at `3d/` in dev and copied there in the
+ * build — never forked: scripts/sync-page3d.ts copies them from the pinned
+ * llm-world commit and tests/vendor.test.ts fails on any drift, so a fix
+ * to the Python app's page is a fix here too. The estate's folder wins a
  * name both have, the order web.py serves them in.
  */
 const PAGE3D = [
-  resolve(import.meta.dirname, "../estate/estate/page3d"),
-  resolve(import.meta.dirname, "../shared/page3d"),
+  resolve(import.meta.dirname, "page3d/estate"),
+  resolve(import.meta.dirname, "page3d/shared"),
 ];
 const TYPES: Record<string, string> = {
   ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",

@@ -1,5 +1,5 @@
 /**
- * The page is apps/estate's page3d/index.html, rewritten as the build
+ * The page is apps/estate's page3d/index.html (vendored in page3d/estate), rewritten as the build
  * serves it: every page3d file relative to the page, the import map
  * pointing at ./3d/, and src/main.ts in place of viewer.js.
  */
@@ -11,8 +11,8 @@ import { respond } from "../src/view/api.ts";
 import { plant } from "../src/view/runner.ts";
 import { API_PATHS } from "../src/worker/protocol.ts";
 
-const PAGE3D_DIRS = ["../../estate/estate/page3d", "../../shared/page3d"].map((d) => resolve(import.meta.dirname, d));
-const original = readFileSync(resolve(import.meta.dirname, "../../estate/estate/page3d/index.html"), "utf8");
+const PAGE3D_DIRS = ["../page3d/estate", "../page3d/shared"].map((d) => resolve(import.meta.dirname, d));
+const original = readFileSync(resolve(import.meta.dirname, "../page3d/estate/index.html"), "utf8");
 
 it("serves page3d's page from any sub-path, with main.ts starting the viewer", () => {
   const html = page3dIndex(original);

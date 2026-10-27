@@ -13,14 +13,16 @@
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { canon, hash16 } from "../src/py/canon.ts";
 import { generate } from "../src/sim/gen.ts";
 import { tick } from "../src/sim/engine/tick.ts";
 import * as watcher from "../src/sim/watcher.ts";
 import type { Ev } from "../src/sim/engine/events.ts";
 
-export const ESTATE = resolve(import.meta.dirname, "../../estate");
+export { ESTATE } from "./reference.ts";
+import { ESTATE, needReference } from "./reference.ts";
+needReference();
 export const PYTHON = process.env.PYTHON ?? "python3";
 
 export interface PyLine { seed: number; days: number; day: number; hash: string; events: string }

@@ -1,0 +1,114 @@
+name: ci
+
+# The port and its parity bar. The reference is llm-world's Python estate
+# at the commit pinned in reference.json, checked out beside this repo;
+# page3d, vendored from that same commit, is held to it byte for byte.
+#   test     on every push and PR: typecheck, the tests (Python beside the
+#            port, hash for hash), two seeds across two year-turns, build.
+#   full     weekly and by hand: the balance fingerprint on both sides
+#            (three years of eight estates) and every seed ticked a year.
+#   upstream weekly and by hand: the same bar against llm-world's main, so
+#            a change there (rules, engine, page3d) shows up as a red run
+#            here; bump reference.json and `npm run sync:page3d` to follow.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - id: ref
+        run: echo "sha=$(jq -r .sha reference.json)" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: yakovkhalinsky/llm-world
+          ref: ${{ steps.ref.outputs.sha }}
+          path: .reference/llm-world
+          sparse-checkout: |
+            apps/estate
+            apps/shared
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: ${{ matrix.python }}
+      - run: npm ci
+      - run: npm test
+      # two years and a day, so both year-turns (364, 728) are crossed
+      - run: npm run parity -- --seeds 1,42 --days 735 --every 91 --watch 3
+      - run: npm run build
+
+  full:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        # pinned: the bar this repo ships against; main: llm-world today
+        against: [pinned, main]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - id: ref
+        env:
+          AGAINST: ${{ matrix.against }}
+        run: |
+          if [ "$AGAINST" = main ]; then echo "sha=main"; else echo "sha=$(jq -r .sha reference.json)"; fi >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: yakovkhalinsky/llm-world
+          ref: ${{ steps.ref.outputs.sha }}
+          path: .reference/llm-world
+          sparse-checkout: |
+            apps/estate
+            apps/shared
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.13"
+      - run: npm ci
+      # against main, the vendored page3d and rules.json are checked too
+      - if: matrix.against == 'main'
+        env:
+          LLM_WORLD: .reference/llm-world
+        run: npx vitest run tests/vendor.test.ts tests/parity.test.ts
+      - env:
+          LLM_WORLD: .reference/llm-world
+        run: npm run parity -- --days 364 --every 91 --watch 3
+      - name: balance fingerprint, both sides
+        run: |
+          py=$(cd .reference/llm-world/apps/estate && python tools/balance.py --fingerprint)
+          ts=$(npm run --silent balance -- --fingerprint)
+          echo "python $py"
+          echo "ts     $ts"
+          test -n "$py" && test "$py" = "$ts"

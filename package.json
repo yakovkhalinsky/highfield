@@ -1,8 +1,14 @@
 {
-  "name": "estate-web",
+  "name": "highfield",
   "private": true,
   "version": "0.1.0",
-  "description": "Highfield, the estate, run entirely in the browser: a TypeScript port of apps/estate with no server and no model.",
+  "description": "Highfield, the estate from llm-world, run entirely in the browser: a TypeScript port of apps/estate with no server and no model.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yakovkhalinsky/highfield"
+  },
+  "homepage": "https://yakov.khalinsky.com/highfield/",
   "type": "module",
   "engines": {
     "node": ">=20.19"
@@ -12,9 +18,12 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
+    "reference": "sh scripts/reference.sh",
+    "pretest": "sh scripts/reference.sh",
     "test": "vitest run",
-    "rules": "\"${PYTHON:-python3}\" ../estate/tools/export_rules.py > src/sim/rules.json.tmp && mv src/sim/rules.json.tmp src/sim/rules.json",
-    "parity": "tsx scripts/parity.ts",
+    "rules": "sh scripts/reference.sh && \"${PYTHON:-python3}\" \"${LLM_WORLD:-.reference/llm-world}/apps/estate/tools/export_rules.py\" > src/sim/rules.json.tmp && mv src/sim/rules.json.tmp src/sim/rules.json",
+    "sync:page3d": "sh scripts/reference.sh && tsx scripts/sync-page3d.ts",
+    "parity": "sh scripts/reference.sh && tsx scripts/parity.ts",
     "balance": "tsx scripts/balance.ts"
   },
   "dependencies": {
