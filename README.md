@@ -48,13 +48,15 @@ plain-text frame).
 
 **The page is the Python app's page.** The 3D front end is llm-world's
 `apps/estate/estate/page3d` and `apps/shared/page3d`, vendored byte for byte
-into [`page3d/estate`](page3d/estate) and [`page3d/shared`](page3d/shared)
-and never forked: `npm run sync:page3d` copies them from the pinned
-llm-world commit, and `tests/vendor.test.ts` fails on any difference. [`vite.config.ts`](vite.config.ts) serves those files at
-`3d/` in dev and copies them in the build. It also rewrites `index.html`:
-the paths become relative, the seed row is added, and `src/main.ts` stands
-in for `viewer.js`. Each rewrite fails the build if page3d's page has
-changed under it.
+into [`page3d/estate`](page3d/estate) and [`page3d/shared`](page3d/shared).
+`npm run sync:page3d` copies them from the pinned llm-world commit, and
+`tests/vendor.test.ts` fails on any difference, except
+`page3d/estate/world.js` — a Highfield visual fork (more realistic people
+and surfaces) that sync leaves alone. [`vite.config.ts`](vite.config.ts)
+serves those files at `3d/` in dev and copies them in the build. It also
+rewrites `index.html`: the paths become relative, the seed row is added,
+and `src/main.ts` stands in for `viewer.js`. Each rewrite fails the build
+if page3d's page has changed under it.
 
 **Time comes from the seed.** The wall clock sets only the pace: a day every
 1 minute, 20 seconds or 5 seconds, paused, or stepped. Everything else is

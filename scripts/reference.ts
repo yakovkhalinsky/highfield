@@ -17,6 +17,19 @@ export const PAGE3D = [
   { from: join(LLM_WORLD, "apps/shared/page3d"), to: join(ROOT, "page3d/shared") },
 ];
 
+/**
+ * Highfield's visual fork of page3d: `world.js` plus its ES modules under
+ * `world/`. Sync skips them; vendor tests only require that forked paths
+ * still exist (and may be Highfield-only extras under `world/`).
+ * Paths are relative to page3d/estate or page3d/shared.
+ */
+export const PAGE3D_VISUAL_FORK = new Set(["world.js"]);
+
+/** True for `world.js` and any file under the Highfield-only `world/` tree. */
+export function isVisualFork(rel: string): boolean {
+  return rel === "world.js" || rel.startsWith("world/");
+}
+
 export function needReference(): void {
   if (!existsSync(join(ESTATE, "tools/parity.py"))) {
     throw new Error(`no Python estate at ${ESTATE}: run \`npm run reference\`, or set LLM_WORLD to an llm-world checkout`);

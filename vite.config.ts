@@ -8,10 +8,11 @@ import { defineConfig } from "vitest/config";
  * byte into page3d/estate: the estate's viewer, HUD and scene, then what
  * it shares with the grove (apps/shared/page3d, three.js vendored) in
  * page3d/shared. They are served at `3d/` in dev and copied there in the
- * build — never forked: scripts/sync-page3d.ts copies them from the pinned
- * llm-world commit and tests/vendor.test.ts fails on any drift, so a fix
- * to the Python app's page is a fix here too. The estate's folder wins a
- * name both have, the order web.py serves them in.
+ * build. scripts/sync-page3d.ts copies them from the pinned llm-world
+ * commit and tests/vendor.test.ts fails on any drift, except
+ * PAGE3D_VISUAL_FORK (world.js + world/*): Highfield keeps a more realistic people
+ * and surfaces pass there, and sync leaves that file alone. The estate's
+ * folder wins a name both have, the order web.py serves them in.
  */
 const PAGE3D = [
   resolve(import.meta.dirname, "page3d/estate"),
