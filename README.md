@@ -35,6 +35,8 @@ parity, shims, and vendored page3d checks. Nothing else does: the page
 itself needs only a browser with Web Workers (and WebGL for the 3D view;
 without it the page falls back to page3d's plain-text frame).
 
+Research notes live in [`docs/research`](docs/research): start with [the November 2026 review](docs/research/review-2026-11-roadmap.md), which builds on [game-systems realism](docs/research/game-systems-realism.md).
+
 ## How it works
 
 | piece | what it is |
