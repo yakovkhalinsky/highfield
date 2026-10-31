@@ -1,15 +1,11 @@
 name: ci
 
-# The port and its parity bar. The reference is llm-world's Python estate
-# at the commit pinned in reference.json, checked out beside this repo;
-# page3d, vendored from that same commit, is held to it byte for byte.
-#   test     on every push and PR: typecheck, the tests (Python beside the
-#            port, hash for hash), two seeds across two year-turns, build.
-#   full     weekly and by hand: the balance fingerprint on both sides
-#            (three years of eight estates) and every seed ticked a year.
-#   upstream weekly and by hand: the same bar against llm-world's main, so
-#            a change there (rules, engine, page3d) shows up as a red run
-#            here; bump reference.json and `npm run sync:page3d` to follow.
+# Highfield: TypeScript estate engine forked from llm-world. Generation and
+# vendored page3d (except the visual fork) still pin to reference.json;
+# day ticks and rules.json are Highfield-owned and covered by unit tests.
+#   test     on every push and PR: typecheck, tests, gen parity, build.
+#   full     weekly and by hand: longer Highfield balance fingerprint and
+#            vendor check against llm-world main (page3d drift signal).
 on:
   push:
     branches: [main]
@@ -58,8 +54,6 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: npm ci
       - run: npm test
-      # two years and a day, so both year-turns (364, 728) are crossed
-      - run: npm run parity -- --seeds 1,42 --days 735 --every 91 --watch 3
       - run: npm run build
 
   full:
@@ -69,7 +63,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # pinned: the bar this repo ships against; main: llm-world today
         against: [pinned, main]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -97,18 +90,14 @@ jobs:
         with:
           python-version: "3.13"
       - run: npm ci
-      # against main, the vendored page3d and rules.json are checked too
+      # page3d vendor drift vs upstream (rules/tick hashes are Highfield-owned)
       - if: matrix.against == 'main'
         env:
           LLM_WORLD: .reference/llm-world
-        run: npx vitest run tests/vendor.test.ts tests/parity.test.ts
-      - env:
-          LLM_WORLD: .reference/llm-world
-        run: npm run parity -- --days 364 --every 91 --watch 3
-      - name: balance fingerprint, both sides
+        run: npx vitest run tests/vendor.test.ts
+      - name: Highfield balance fingerprint (deterministic)
         run: |
-          py=$(cd .reference/llm-world/apps/estate && python tools/balance.py --fingerprint)
-          ts=$(npm run --silent balance -- --fingerprint)
-          echo "python $py"
-          echo "ts     $ts"
-          test -n "$py" && test "$py" = "$ts"
+          a=$(npm run --silent balance -- --fingerprint)
+          b=$(npm run --silent balance -- --fingerprint)
+          echo "fingerprint $a"
+          test -n "$a" && test "$a" = "$b"

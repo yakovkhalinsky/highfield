@@ -2,13 +2,14 @@
 
 **Play it: <https://yakov.khalinsky.com/highfield/>**
 
-A housing estate that lives in your browser. Highfield is a TypeScript port
-of the estate from [llm-world](https://github.com/yakovkhalinsky/llm-world)
+A housing estate that lives in your browser. Highfield started as a TypeScript
+port of the estate from [llm-world](https://github.com/yakovkhalinsky/llm-world)
 ([`apps/estate`](https://github.com/yakovkhalinsky/llm-world/tree/main/apps/estate)),
 and runs with no server and no model. The simulation runs in a Web Worker,
 the estate is saved in IndexedDB, and the whole app is a static build that
-GitHub Pages (or any static host) can serve from a sub-path. From the same
-seed it grows the same estate as the Python engine, hash for hash.
+GitHub Pages (or any static host) can serve from a sub-path. Generation still
+matches the pinned Python layout seed for seed; the day tick and rules are a
+Highfield realism fork and no longer claim hash-for-hash parity with Python.
 
 <p align="center">
   <img src="docs/screenshots/estate-web-overview.webp" width="800" alt="Highfield in the browser, day 72, afternoon, the chronicle open">
@@ -23,23 +24,22 @@ seed it grows the same estate as the Python engine, hash for hash.
 ```sh
 npm install
 npm run dev       # the page on Vite's dev server
-npm test          # unit tests, parity against the Python engine, the page
+npm test          # unit tests, gen parity vs Python, the page
 npm run build     # typecheck, then the static site in dist/
 npm run preview   # serve dist/ as it will be served
 ```
 
-`npm test` and `npm run parity` need `python3` (3.12 or later) and `git` on
-your PATH: they first fetch the Python reference (below) into
-`.reference/llm-world`.
-Nothing else does: the page itself needs only a browser with Web Workers
-(and WebGL for the 3D view; without it the page falls back to page3d's
-plain-text frame).
+`npm test` needs `python3` (3.12 or later) and `git` on your PATH: it first
+fetches the Python reference (below) into `.reference/llm-world` for gen
+parity, shims, and vendored page3d checks. Nothing else does: the page
+itself needs only a browser with Web Workers (and WebGL for the 3D view;
+without it the page falls back to page3d's plain-text frame).
 
 ## How it works
 
 | piece | what it is |
 |---|---|
-| [`src/sim`](src/sim) | the engine, ported function by function from `apps/estate/estate`: world generation, the day's tick, residents' `decide()`, families, households and the watcher's rules (`--decide rules`). It reads the Python engine's own rules, exported to [`src/sim/rules.json`](src/sim/rules.json). |
+| [`src/sim`](src/sim) | the engine: world generation (still matched to Python), then a Highfield-owned day tick, needs, families, households and watcher rules in [`src/sim/rules.json`](src/sim/rules.json). |
 | [`src/py`](src/py) | Python's `random`, rounding, floor division, `sum` and `repr` in TS, so the same seed draws the same numbers (below). |
 | [`src/view/runner.ts`](src/view/runner.ts) | the Python runner's loop: tick, keep the last 400 events and 64 day books, let the watcher look when the seed says it is due, then write the chronicle. |
 | [`src/view/api.ts`](src/view/api.ts) | web.py's four endpoints (`/api/ground`, `/api/state`, `/api/plain`, `/api/control`) answered from that state, with the same JSON. |
@@ -156,60 +156,42 @@ a save's format, rules and shape are checked before it is resumed.
 
 ## The reference: llm-world, pinned
 
-The Python estate stays in llm-world, the one source of truth for the rules
-and the engine. [`reference.json`](reference.json) pins the llm-world commit
-this port is held to, and both the parity tests and the vendored page3d come
-from that commit:
+[`reference.json`](reference.json) pins the llm-world commit used for
+**world generation** parity, Python shims, and vendored page3d (except
+Highfield's visual fork of `world.js` / `world/`). The day tick and
+[`src/sim/rules.json`](src/sim/rules.json) are Highfield-owned: they may
+diverge from Python for realism work.
 
 - `npm run reference` fetches it (only `apps/estate` and `apps/shared`, one
-  commit deep) into `.reference/llm-world`. `npm test`, `npm run parity` and
-  `npm run rules` do this first. CI checks it out there itself.
+  commit deep) into `.reference/llm-world`. `npm test` does this first. CI
+  checks it out there itself.
 - `LLM_WORLD=/path/to/llm-world npm test` uses a checkout of your own
   instead.
-- Once a week, and by hand, CI's `full` job runs the whole bar, the
-  three-year balance fingerprint included, against the pinned commit and
-  against llm-world's `main`. A red `main` run means llm-world has moved on.
-  To follow it, set the new sha in `reference.json`, then run
-  `npm run reference && npm run sync:page3d && npm run rules`, then
-  `npm test`, and commit them together.
+- To refresh vendored page3d after an upstream layout change: set the new
+  sha in `reference.json`, then `npm run reference && npm run sync:page3d`,
+  and `npm test`.
 
-## The bar: same seed, same estate
-
-The port has to produce the same estate as the Python engine from the same
-seed. It is not enough for it to be similar.
+## The bar
 
 ```sh
 npm install
-npm test          # the shims against CPython, rules.json freshness, and gen parity
-npm run parity    # Python vs TS world hashes, seeds 1-8, 42 and 3771
+npm test          # shims, gen parity vs Python, Highfield engine + page tests
 ```
 
-Run `npm test` and `npm run parity` with `python3` (3.12 or later) on your
-PATH. They call llm-world's
-[`apps/estate/tools/parity.py`](https://github.com/yakovkhalinsky/llm-world/blob/main/apps/estate/tools/parity.py),
-a read-only hook that plants worlds in memory and prints:
+**Still matched to Python:** planted estates (gen hashes), `src/py` shims,
+vendored page3d except the visual fork.
 
-- each world's canonical hash; and
-- CPython's reference values for the shims.
+**Highfield-owned:** day ticks, watcher fates, needs, `rules.json`. Covered
+by deterministic unit tests (seeds, daybooks, events), not cross-language
+world hashes. `npm run parity` remains available for optional gen/tick
+exploration against the reference, but CI no longer requires tick hashes
+to match.
 
-If two worlds differ, the harness reports the first JSON path where they
-diverge.
-
-**The canonical form.** Keys are sorted and there are no spaces. Tuples
-become lists. Any integral number below 1e16 is written as an integer, and
-every other number is written as Python's `repr`. The TS twin is
-[`src/py/canon.ts`](src/py/canon.ts), and the hash is sha256 cut to 16 hex
-characters.
-
-**What can't match, and why it doesn't matter.**
-
-- **Python's int/float distinction.** JS has only one number type, so the
-  hash doesn't see this difference. Every value still agrees, and no engine
-  code reads the type. The one place the type shows is `json.dumps` in the
-  gate fingerprint, where the port marks which fields are floats.
-- **`sum()` before Python 3.12.** Python 3.12 made `sum()` of floats
-  Neumaier-compensated. The port does the same, so the Python side of the
-  test needs 3.12 or later. The engine itself still runs on 3.11.
+**The canonical form** (for gen hashes and saves). Keys are sorted and
+there are no spaces. Tuples become lists. Any integral number below 1e16
+is written as an integer, and every other number is written as Python's
+`repr`. The TS twin is [`src/py/canon.ts`](src/py/canon.ts), and the hash
+is sha256 cut to 16 hex characters.
 
 ## The Python shims (`src/py`)
 
@@ -222,12 +204,9 @@ characters.
 | `repr(float)` | `floatRepr` |
 | `max`/`min` with `key=` (the first of any ties wins) | `maxBy`, `minBy` |
 
-The rules come from `src/sim/rules.json`, which `npm run rules` exports from
-the Python engine's `rules.R`. A test fails if the JSON drifts from what
-the engine reads.
-`npm run rules` uses POSIX shell syntax (`${PYTHON:-python3}`, `mv`), so on
-Windows run it from Git Bash or WSL rather than cmd; everything else is
-plain Node.
+`npm run rules` can still refresh `rules.json` from Python when useful;
+Highfield may then edit that file for realism. It uses POSIX shell syntax
+(`${PYTHON:-python3}`, `mv`), so on Windows run it from Git Bash or WSL.
 
 ## License
 

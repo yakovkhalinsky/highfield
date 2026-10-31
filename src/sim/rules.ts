@@ -1,10 +1,7 @@
 /**
- * The live ruleset — apps/estate's `rules.R`, base merged with the estate
- * pack, exported by `apps/estate/tools/export_rules.py` into rules.json.
- *
- * One home per fact (class 2): the port never writes a rule value of its
- * own. `npm run rules` regenerates the file, and the parity test fails if
- * the committed copy has drifted from what the Python engine reads.
+ * The live ruleset — Highfield-owned (forked from llm-world's rules.R).
+ * `npm run rules` can refresh from Python when useful; realism changes
+ * edit this file directly afterward.
  *
  * Tables keep the order they were written in (the engine iterates the
  * needs, the fixtures and the roster in that order). Numeric-string keys —
@@ -82,10 +79,11 @@ export interface Rules {
   school: {
     ages: Pair; days: number[]; run: string; hours: string[];
     meets: Record<string, number>; per_yard_cell: number;
+    holidays?: Pair[];
   };
   work: {
-    share: number; commute: string; shift: string[]; school_hours: string[];
-    meets: Record<string, number>;
+    share: number; local_share?: number; commute: string; shift: string[];
+    school_hours: string[]; meets: Record<string, number>;
   };
   pacing: {
     day_seconds: number[]; watcher_gap: Pair; watcher_gap_cloud: Pair;

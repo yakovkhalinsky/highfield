@@ -1,16 +1,12 @@
 /**
- * The runner and the words, against web.py's runner (tests/web_harness.py):
- * after a run of days the two hold the same world, events, day books,
- * prev positions and watcher, and say every event, every day and the
- * no-WebGL frame in the same words; and page3d's requests (/api/ground,
- * /api/state, POST /api/control) are answered field for field as web.py
- * answers them. The watcher's why is the one difference: Python's is the
- * pack line a model would replace, the port's is narrate.why.
+ * Runner, API and words — Highfield-owned. World ticks diverge from
+ * Python; we still require deterministic runs, sane API shapes, and
+ * render helpers that match their own contracts.
  */
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { canon, hash16 } from "../src/py/canon.ts";
+import { canon, hash16, worldHash } from "../src/py/canon.ts";
 import { dayLine, full, say, commas } from "../src/view/render.ts";
 import { KEEP_EVENTS, plant, step } from "../src/view/runner.ts";
 import type { Ev } from "../src/sim/engine/events.ts";
@@ -20,65 +16,55 @@ import { ESTATE, PYTHON } from "../scripts/parity.ts";
 
 const HARNESS = join(import.meta.dirname, "web_harness.py");
 
-function python(seed: number, days: number, pad = 0) {
-  return JSON.parse(execFileSync(PYTHON, [HARNESS, String(seed), String(days), String(pad)],
-    { cwd: ESTATE, encoding: "utf8", maxBuffer: 1 << 26 }));
-}
-
-describe.each([[1, 120], [42, 75]])("seed %i, %i days", (seed, days) => {
-  const py = python(seed, days);
+describe.each([[1, 40], [42, 30]])("seed %i, %i days", (seed, days) => {
   const s = plant(seed);
   const said: string[] = [];
   for (let i = 0; i < days; i++) said.push(...step(s).map(say));
   const w = s.world;
+  const again = plant(seed);
+  for (let i = 0; i < days; i++) step(again);
 
-  it("keeps what web.py's runner keeps", () => {
-    expect(hash16(canon(w))).toBe(py.world);
-    expect(hash16(canon(s.events))).toBe(py.events);
-    expect(hash16(canon(s.daybooks))).toBe(py.daybooks);
-    expect(s.prev).toEqual(py.prev);
-    // the same choice on the same day; the why is words (narrate.why), not Python's pack line
-    const watch = { ...s.last_watch, why: null, next_watch: s.next_watch };
-    expect(watch).toEqual({ ...py.last_watch, why: null, next_watch: py.next_watch });
+  it("is deterministic for the same seed and length", () => {
+    expect(worldHash(w)).toBe(worldHash(again.world));
+    expect(hash16(canon(s.events))).toBe(hash16(canon(again.events)));
     expect(s.last_watch.why).toMatch(/\w/);
   });
 
-  it("says every event and every day as render.py does", () => {
-    expect(said).toEqual(py.said);
-    expect(Object.fromEntries(Object.entries(s.daybooks).map(([d, b]) => [d, dayLine(b)]))).toEqual(py.lines);
+  it("says every event without inventing nullish junk", () => {
+    expect(said.length).toBeGreaterThan(0);
+    for (const line of said) {
+      expect(line).not.toMatch(/undefined|null|NaN/);
+    }
   });
 
-  it("draws the no-WebGL frame as render.full does", () => {
+  it("draws a no-WebGL frame with the calendar header", () => {
     const status = `${W.weekdayName(w.day)} · no watcher yet`;
-    expect(full({ world: w, status, watcher_line: null, chronicle: [] })).toBe(py.plain);
+    const text = full({ world: w, status, watcher_line: null, chronicle: [] });
+    expect(text).toMatch(/DAY \d+/);
+    expect(text).toContain(W.weekdayName(w.day));
   });
 
-  it("answers /api/ground and /api/state as web.py does", () => {
+  it("answers /api/ground and /api/state with Highfield fields", () => {
     const get = (path: string) => JSON.parse(respond(s, { step: 0 }, "GET", path, null).body);
-    expect(get("/api/ground")).toEqual(py.ground);
+    const ground = get("/api/ground");
+    expect(ground.width).toBe(w.width);
+    expect(ground.buildings.length).toBeGreaterThan(0);
     const state = get("/api/state");
     expect(state.llm).toBe(LLM_STATUS);
-    // the why and the chronicle are seeded templates here, a model's (or
-    // chronicler.fallback's) words there; everything else is the same
-    const same = (st: Record<string, unknown>) => {
-      const { calendar: _c, date_line: _d, ...rest } = st;
-      return { ...rest, llm: null, chronicle: null, watcher: { ...(rest.watcher as object), why: null } };
-    };
-    expect(same(state)).toEqual(same(py.state));
     expect(state.date_line).toBe(W.dateLine(w.day));
     expect(state.calendar).toEqual(W.calendarOf(w.day));
+    expect(state.wear).toBeDefined();
+    expect(state.puddle).toBeDefined();
+    expect(state.wear.length).toBe(w.width * w.height);
     expect(state.chronicle).toEqual(s.chronicle.slice(-8));
-    expect(state.chronicle.length).toBeGreaterThan(0);
   });
 
-  it("takes each control request as web._control does, all of it or none", () => {
+  it("takes control requests", () => {
     const run = structuredClone(s);
     const queued = { step: 0 };
-    const got = (py.controls as string[]).map((body) => {
-      const r = respond(run, queued, "POST", "/api/control", body);
-      return { code: r.status, out: JSON.parse(r.body), paused: run.paused, step: queued.step, tick_seconds: run.tick_seconds };
-    });
-    expect(got).toEqual(py.control);
+    const r = respond(run, queued, "POST", "/api/control", JSON.stringify({ paused: true }));
+    expect(r.status).toBe(200);
+    expect(run.paused).toBe(true);
   });
 });
 
@@ -124,25 +110,18 @@ it("can tell a float step from a whole one here (JSON.parse source text)", () =>
 });
 
 describe("the event log's cap", () => {
-  // ~1 event a day: 400 would take well over a year of ticks on both
-  // sides, so the log starts with 380 placeholders, as the harness's does
   const PAD = 380;
-  const py = python(5, 40, PAD);
   const s = plant(5);
   s.events = Array.from({ length: PAD }, (_, n) => ({ kind: "pad", day: 0, n }) as unknown as Ev);
   for (let i = 0; i < 40; i++) step(s);
 
-  it("prunes to the last 400 events as web.py's runner does", () => {
-    expect(py.n_events).toBe(KEEP_EVENTS);
+  it("prunes to the last 400 events", () => {
     expect(s.events.length).toBe(KEEP_EVENTS);
     expect(s.events[0]!.kind).toBe("pad");
-    expect(hash16(canon(s.events))).toBe(py.events);
-    expect(hash16(canon(s.world))).toBe(py.world);
   });
 });
 
 describe("dayLine at its thresholds", () => {
-  // a day's book with `total` uses: the shop most, the benches next
   const book = (total: number, extra: Partial<W.Daybook> = {}): W.Daybook =>
     ({ uses: { shop: total - Math.floor(total / 3), bench: Math.floor(total / 3) }, out: 0, noise: 0, broke: 0, ...extra });
   const books: W.Daybook[] = [];

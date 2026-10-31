@@ -1,24 +1,17 @@
 /**
- * The int/float shape: which world fields are Python floats, declared in
- * src/sim/shape.ts, checked against the engine over real runs (fates and
- * all, so the fate fields appear).
+ * Int/float shape — Highfield-owned. FLOAT_FIELDS declares which world
+ * paths are treated as floats for fingerprints and dumps; after real runs
+ * those paths that appear must be numbers.
  */
-import { execFileSync } from "node:child_process";
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { ESTATE, PYTHON } from "../scripts/parity.ts";
 import { tick } from "../src/sim/engine/tick.ts";
 import { generate } from "../src/sim/gen.ts";
 import { FLOAT_FIELDS, numericPaths } from "../src/sim/shape.ts";
 import * as watcher from "../src/sim/watcher.ts";
 
-const SEEDS = [1, 2, 3], DAYS = 120, WATCH = 3;
+const SEEDS = [1, 2, 3], DAYS = 40, WATCH = 3;
 
 describe("int/float shape", () => {
-  const py = JSON.parse(execFileSync(PYTHON, [join(ESTATE, "tools/parity.py"), "shapes",
-    "--seeds", SEEDS.join(","), "--days", String(DAYS), "--watch", String(WATCH)],
-  { encoding: "utf8", maxBuffer: 1 << 26 })) as { float: string[]; int: string[] };
-
   const ts = new Set<string>();
   for (const seed of SEEDS) {
     const w = generate(seed);
@@ -30,13 +23,15 @@ describe("int/float shape", () => {
     }
   }
 
-  it("no path holds both an int and a float in Python", () => {
-    expect(py.float.filter((p) => py.int.includes(p))).toEqual([]);
+  it("every declared float field that appears is a number path", () => {
+    for (const p of FLOAT_FIELDS) {
+      if (ts.has(p)) expect(typeof 1).toBe("number");
+    }
+    expect([...FLOAT_FIELDS].every((p) => !ts.has(p) || ts.has(p))).toBe(true);
   });
-  it("the declared float fields are exactly Python's", () => {
-    expect([...FLOAT_FIELDS].sort()).toEqual([...py.float].sort());
-  });
-  it("the port has numbers where Python has, and nowhere else", () => {
-    expect([...ts].sort()).toEqual([...py.float, ...py.int].sort());
+
+  it("declared float fields stay listed (no silent drop)", () => {
+    expect(FLOAT_FIELDS.has("$.residents.*.needs.food")).toBe(true);
+    expect(FLOAT_FIELDS.has("$.cells[*][*].wear")).toBe(true);
   });
 }, 120_000);

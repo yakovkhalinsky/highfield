@@ -2,7 +2,7 @@
   "name": "highfield",
   "private": true,
   "version": "0.1.0",
-  "description": "Highfield, the estate from llm-world, run entirely in the browser: a TypeScript port of apps/estate with no server and no model.",
+  "description": "Highfield, a browser estate sim forked from llm-world's apps/estate: TypeScript engine, IndexedDB saves, no server and no model.",
   "license": "MIT",
   "repository": {
     "type": "git",
