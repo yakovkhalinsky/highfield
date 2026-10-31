@@ -31,7 +31,7 @@ export interface Unit {
 }
 export interface Household {
   id: number; kind: string; unit: number; members: number[]; moved_in: number;
-  unhappy: number; [k: string]: unknown;
+  unhappy: number; food_stock: number; [k: string]: unknown;
 }
 export interface Where {
   mode: string; unit: number | null; x: number; y: number; fixture: number | null;
@@ -137,6 +137,14 @@ export function dateLine(day: number): string {
   return `${c.weekday} · ${c.day} ${c.monthName} · Year ${c.year} · ${capitalise(c.season)}`;
 }
 
+/** Compact day label for the days / chronicle feed column (fits the HUD grid). */
+export function dateShort(day: number): string {
+  const c = calendarOf(day);
+  return c.year === 1
+    ? `${c.day} ${c.monthName}`
+    : `${c.day} ${c.monthName} · ${c.year}`;
+}
+
 export function phaseNames(): string[] {
   return R.world.phases;
 }
@@ -236,7 +244,10 @@ export function newUnit(uid: number, building: number, floor: number, capacity: 
 }
 
 export function newHousehold(hid: number, kind: string, unit: number): Household {
-  return { id: hid, kind, unit, members: [], moved_in: 0, unhappy: 0.0 };
+  return {
+    id: hid, kind, unit, members: [], moved_in: 0, unhappy: 0.0,
+    food_stock: R.engine.pantry ?? 8,
+  };
 }
 
 export function newResident(rid: number, household: number, age: number): Resident {

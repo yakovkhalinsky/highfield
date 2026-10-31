@@ -10,6 +10,7 @@
  */
 import { parseSeed } from "./seed.ts";
 import { capitalise, dateLine } from "./sim/world.ts";
+import { installHudBridge, type EstateHUD } from "./view/hudBridge.ts";
 import { API_PATHS, type FromWorker, type Opened, type ToWorker } from "./worker/protocol.ts";
 
 type Reply = Exclude<FromWorker, { type: "error" } | { type: "saving" }>;
@@ -115,7 +116,7 @@ function seedControls(o: Opened): void {
   opened = o.broken !== undefined
     ? "Save cannot be run"
     : o.crashed !== undefined
-    ? `Stopped on day ${o.crashed.toLocaleString("en-AU")} last time`
+    ? `Stopped · ${dateLine(o.crashed)} last time`
     : o.resumed ? `Resumed · ${dateLine(o.day)}` : "";
   savingNote(o.saving, o.why);
   const go = (fresh: boolean) => {
@@ -167,17 +168,9 @@ async function boot(): Promise<void> {
   // control, and a page going away cannot wait for the flush to finish.
   addEventListener("pagehide", () => void ask({ type: "flush" }));
   installApi();
-  /* Vendored hud.js still writes "day N · season · weekday". Swap in the
-   * calendar line from the snapshot without forking the HUD. */
-  const HUD = (globalThis as { EstateHUD?: { head?: (st: { date_line?: string }) => void } }).EstateHUD;
-  if (HUD?.head) {
-    const inner = HUD.head.bind(HUD);
-    HUD.head = (st) => {
-      inner(st);
-      const el = document.getElementById("when");
-      if (el && st?.date_line) el.textContent = st.date_line;
-    };
-  }
+  /* Shared phaseView + live cards on the clock phase + calendar date_line,
+   * without forking vendored hud.js. */
+  installHudBridge((globalThis as { EstateHUD?: EstateHUD }).EstateHUD);
   const viewer = document.createElement("script");
   viewer.type = "module";
   viewer.src = "3d/viewer.js";
