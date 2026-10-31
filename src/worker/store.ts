@@ -170,18 +170,24 @@ export async function forget(seed: number): Promise<void> {
 /**
  * Hold this seed for this tab (a Web Lock, kept until the worker goes), so
  * a second tab on the same seed knows and does not save over the first.
- * Without Web Locks every tab holds it, as before. Resolves to a release.
+ * Without Web Locks every tab holds it, as before. Resolves to a release
+ * that awaits the lock actually freeing — reopen with ifAvailable must not
+ * race the previous hold (Node and browsers both expose locks now).
  */
-export function claim(seed: number): Promise<(() => void) | null> {
+export function claim(seed: number): Promise<(() => Promise<void>) | null> {
   const locks = (globalThis.navigator as Navigator | undefined)?.locks;
-  if (!locks) return Promise.resolve(() => {});
+  if (!locks) return Promise.resolve(async () => {});
   return new Promise((done) => {
-    locks.request(`highfield:${seed}`, { ifAvailable: true }, (lock) => {
+    let unlock!: () => void;
+    const held = new Promise<void>((r) => { unlock = r; });
+    const req = locks.request(`highfield:${seed}`, { ifAvailable: true }, (lock) => {
       if (!lock) {
         done(null);
         return;
       }
-      return new Promise<void>((release) => done(() => release()));
-    }).catch(() => done(() => {}));
+      done(async () => { unlock(); await req; });
+      return held;
+    });
+    req.catch(() => done(async () => {}));
   });
 }

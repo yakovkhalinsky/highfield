@@ -27,7 +27,7 @@ let saving: Promise<void> | null = null;
 let dirty = false;
 /** this tab holds the seed's lock; a second tab on the seed runs but never saves */
 let held = false;
-let release: (() => void) | null = null;
+let release: (() => Promise<void>) | null = null;
 /** the day this estate stopped on before (its save's crash mark), until a day past it is saved */
 let crashedAt: number | undefined;
 /** what the last save came to, so the page hears only when it changes */
@@ -61,7 +61,7 @@ function persist(): Promise<void> {
 
 async function open(seed: number | null, fresh: boolean) {
   const s = seed ?? (await store.lastSeed()) ?? DEFAULT_SEED;
-  release?.();
+  await release?.();
   release = await store.claim(s);
   held = release !== null;
   if (fresh && held) await store.forget(s);

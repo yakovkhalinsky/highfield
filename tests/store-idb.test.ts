@@ -65,6 +65,15 @@ beforeAll(async () => {
 afterEach(() => { boom.on = false; sick.path = ""; sick.throws = false; vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe("the store", () => {
+  it("reclaims a seed after this tab releases it", async () => {
+    const a = await store.claim(42);
+    expect(a).toBeTypeOf("function");
+    await a!();
+    const b = await store.claim(42);
+    expect(b).toBeTypeOf("function");
+    await b!();
+  });
+
   it("resumes its own save, and refuses another format, other rules, the wrong seed or a broken shape", async () => {
     const s = plant(11);
     step(s);
