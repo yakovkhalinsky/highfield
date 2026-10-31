@@ -6,6 +6,7 @@ name: ci
 #   test     on every push and PR: typecheck, tests, gen parity, build.
 #   full     weekly and by hand: longer Highfield balance fingerprint and
 #            vendor check against llm-world main (page3d drift signal).
+# pages.yml starts after a successful push-to-main ci run.
 on:
   push:
     branches: [main]
