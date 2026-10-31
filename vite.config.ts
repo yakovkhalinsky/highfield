@@ -41,18 +41,19 @@ function files(dir: string, at = ""): string[] {
  */
 /** This app's one addition to page3d's controls: which estate, kept or anew. */
 const SEED_ROW = `      <div class="speedrow seedrow">
-        <span class="hint" title="every estate grows from a seed; the same seed grows the same estate">seed</span>
+        <span class="hint" title="the same seed grows the same estate">seed</span>
         <input id="seedIn" inputmode="numeric" aria-label="seed" value="">
-        <button id="plantBtn" title="open this seed's estate, where it was left">plant</button>
+        <button id="plantBtn" title="open this seed's estate, where it was left">open</button>
         <button id="againBtn" title="this seed again from day 1">start over</button>
         <span class="note" id="seedNote"></span>
       </div>`;
 const SEED_STYLE = `<style>
   .speedrow.seedrow { flex-wrap: wrap; }
   .seedrow input { width: 5em; min-width: 0; font: inherit; font-size: 12px;
-    background: transparent; color: inherit; border: 1px solid var(--edge, #555);
-    border-radius: 6px; padding: 3px 6px; font-variant-numeric: tabular-nums; }
-  .seedrow .note { flex-basis: 100%; font-size: 11px; color: var(--dim, #999); }
+    background: transparent; color: inherit; border: 1px solid var(--edge);
+    border-radius: 7px; padding: 5px 9px; min-height: 28px;
+    font-variant-numeric: tabular-nums; box-sizing: border-box; }
+  .seedrow .note { flex-basis: 100%; font-size: 11px; color: var(--dim); }
 </style>`;
 
 export function page3dIndex(html: string): string {

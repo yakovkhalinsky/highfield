@@ -38,7 +38,7 @@ worker.onmessage = (ev: MessageEvent<FromWorker>) => {
 /**
  * Say on the page that the estate stopped, the way page3d says it has no
  * WebGL. The overlay covers the HUD, so the seed row moves onto it: "start
- * over" stays in reach. There is no estate to show in glyphs.
+ * over" stays in reach. Details go to the console; the panel stays short.
  */
 function stopped(why: string, heading = "the estate stopped"): void {
   console.error("estate worker:", why);
@@ -49,7 +49,13 @@ function stopped(why: string, heading = "the estate stopped"): void {
   const text = document.getElementById("noglWhy");
   const panel = box?.querySelector(".noglbox");
   const row = document.querySelector(".seedrow");
-  if (text) text.textContent = why;
+  if (text) {
+    text.textContent = heading === "this save cannot be run"
+      ? 'Use "start over" below to plant this seed again from day 1.'
+      : heading === "the estate could not open"
+      ? "Check the seed, or try again."
+      : 'The run stopped. Use "start over" below if it will not open again.';
+  }
   box?.querySelectorAll<HTMLElement>(".noglhint, #plain").forEach((el) => { el.hidden = true; });
   if (panel && row && !panel.contains(row)) panel.append(row);
   if (box) box.hidden = false;
@@ -96,7 +102,9 @@ let opened = "";
 /** The seed row's note: how the estate opened, and whether it is being kept. */
 function savingNote(ok: boolean, why: string): void {
   const note = $("seedNote");
-  if (note) note.textContent = `${opened} · ${ok ? "saved in this browser" : `not saved (${why})`}`;
+  if (!note) return;
+  const keep = ok ? "saved in this browser" : `not saved (${why})`;
+  note.textContent = opened ? `${opened} · ${keep}` : keep;
 }
 
 function seedControls(o: Opened): void {
@@ -104,10 +112,10 @@ function seedControls(o: Opened): void {
   const note = $("seedNote");
   if (input) input.value = String(o.seed);
   opened = o.broken !== undefined
-    ? `its save cannot be run (${o.broken}); "start over" plants it afresh`
+    ? "save cannot be run"
     : o.crashed !== undefined
-    ? `stopped on day ${o.crashed.toLocaleString("en-AU")} last time; if it stops there again, "start over" plants it afresh`
-    : o.resumed ? `resumed at day ${o.day.toLocaleString("en-AU")}` : "planted";
+    ? `stopped on day ${o.crashed.toLocaleString("en-AU")} last time`
+    : o.resumed ? `resumed at day ${o.day.toLocaleString("en-AU")}` : "";
   savingNote(o.saving, o.why);
   const go = (fresh: boolean) => {
     const n = parseSeed(input?.value ?? "");
@@ -125,7 +133,12 @@ function seedControls(o: Opened): void {
   const againBtn = $<HTMLButtonElement>("againBtn");
   if (plantBtn) plantBtn.onclick = () => go(false);
   if (againBtn) againBtn.onclick = () => {
-    if (confirm(`Start estate ${input?.value ?? ""} again from day 1? Its saved days are forgotten.`)) go(true);
+    const n = parseSeed(input?.value ?? "");
+    if (n === null) {
+      if (note) note.textContent = "a seed is a whole number";
+      return;
+    }
+    if (confirm(`Start estate ${n} again from day 1? Its saved days are forgotten.`)) go(true);
   };
   input?.addEventListener("keydown", (e) => { if (e.key === "Enter") go(false); });
 }
@@ -145,7 +158,8 @@ async function boot(): Promise<void> {
   }
   seedControls(r);
   if (r.broken !== undefined) {
-    stopped(`estate ${r.seed}'s save cannot be run: ${r.broken}`, "this save cannot be run");
+    console.error(`estate ${r.seed}'s save cannot be run: ${r.broken}`);
+    stopped(r.broken, "this save cannot be run");
     return;
   }
   // Best effort only: the worker already saves after every day and every
@@ -159,5 +173,6 @@ async function boot(): Promise<void> {
 }
 
 boot().catch((e: unknown) => {
-  stopped(`the estate could not open: ${e instanceof Error ? e.message : String(e)}`, "the estate could not open");
+  console.error(e);
+  stopped(e instanceof Error ? e.message : String(e), "the estate could not open");
 });

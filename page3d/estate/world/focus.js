@@ -1,12 +1,11 @@
 /* Picking and the screenshot cameras. Highfield visual fork of world.js. */
-import * as THREE from 'three';
 import { TILE_TOP } from './scale.js';
 
 export function createFocus(kit) {
   const {
     controls, camera, ground, W, H, raycaster, ndc, clock,
     buildingBodies, buildingById, fixtureGroup, tiles,
-    personAt, sitMode, routes, routeT0, routeDur,
+    personAt, routes, routeT0, routeDur,
   } = kit;
 
   /* -------------------------------------------------------------- pick */
@@ -201,78 +200,7 @@ export function createFocus(kit) {
              fallbacks: routeFallbacks };
   }
 
-  /* Where seated parts sit relative to their bench (facing-local z), for
-   * a headless check that a sit clears the backrest and puts the thighs
-   * toward the path. */
-  function sitProbe() {
-    const torsoMesh = kit.torsoMesh;
-    const people = kit.people;
-    const thighLMesh = kit.thighLMesh, shinLMesh = kit.shinLMesh, headMesh = kit.headMesh;
-    const benchByCell = kit.benchByCell;
-    if (!torsoMesh) return [];
-    const out = [];
-    const m = new THREE.Matrix4();
-    const p = new THREE.Vector3();
-    for (let i = 0; i < people.length; i++) {
-      if (sitMode[i] !== 1) continue;
-      const row = { id: people[i].id, parts: {} };
-      [['torso', torsoMesh], ['thighL', thighLMesh], ['shinL', shinLMesh],
-       ['head', headMesh]].forEach(([name, mesh]) => {
-        mesh.getMatrixAt(i, m);
-        p.setFromMatrixPosition(m);
-        row.parts[name] = { x: +p.x.toFixed(3), y: +p.y.toFixed(3), z: +p.z.toFixed(3) };
-      });
-      const key = people[i].x + ',' + people[i].y;
-      const b = benchByCell[key];
-      if (b) {
-        row.bench = { x: b.x, z: b.z, fx: b.fx, fz: b.fz, yaw: b.yaw };
-        /* local z along facing: positive = toward path */
-        const dx = row.parts.torso.x - b.x, dz = row.parts.torso.z - b.z;
-        row.torsoLocalZ = +(dx * b.fx + dz * b.fz).toFixed(3);
-        const tdx = row.parts.thighL.x - b.x, tdz = row.parts.thighL.z - b.z;
-        row.thighLocalZ = +(tdx * b.fx + tdz * b.fz).toFixed(3);
-        const sdx = row.parts.shinL.x - b.x, sdz = row.parts.shinL.z - b.z;
-        row.shinLocalZ = +(sdx * b.fx + sdz * b.fz).toFixed(3);
-        row.shinY = row.parts.shinL.y;
-      }
-      out.push(row);
-    }
-    return out;
-  }
-
-  /* Three-quarter framing for checking the knee bend on a sit. */
-  function focusBenchSide() {
-    const benchByCell = kit.benchByCell;
-    const people = kit.people;
-    const keys = Object.keys(benchByCell).sort();
-    let best = keys[0], bestN = -1;
-    const counts = {};
-    for (let i = 0; i < people.length; i++) {
-      const p = people[i];
-      if (p.in) continue;
-      const k = p.x + ',' + p.y;
-      if (benchByCell[k]) counts[k] = (counts[k] || 0) + 1;
-    }
-    keys.forEach(k => {
-      const n = counts[k] || 0;
-      if (n > bestN) { bestN = n; best = k; }
-    });
-    const b = benchByCell[best];
-    if (!b) return false;
-    const y = TILE_TOP + 0.55;
-    const ax = Math.cos(b.yaw), az = -Math.sin(b.yaw);
-    /* from the path, a little along the seat — stays clear of walls */
-    controls.target.set(b.x, y, b.z);
-    camera.position.set(
-      b.x + b.fx * 2.8 + ax * 2.0,
-      y + 1.4,
-      b.z + b.fz * 2.8 + az * 2.0);
-    controls.update();
-    return true;
-  }
-
   return {
-    pick, focusBench, focusPerimeter, focusCell, focusBenchSide,
-    routeStats, sitProbe,
+    pick, focusBench, focusPerimeter, focusCell, routeStats,
   };
 }

@@ -251,8 +251,7 @@ export function createWorld(ground, canvas, opts) {
     paintGround, paintWindows, buildGlow, updateSky,
     buildFixtures, syncFixtures, syncResidents, updateResidents,
     syncWeather, updateWeather,
-    pick, focusBench, focusPerimeter, focusCell, focusBenchSide,
-    routeStats, sitProbe,
+    pick, focusBench, focusPerimeter, focusCell, routeStats,
     clothMat, pantsMat, headMat, hairMat, lampBulbMat, shopSignMat,
     glowMat, glow,
   } = kit;
@@ -325,14 +324,6 @@ export function createWorld(ground, canvas, opts) {
     updateWeather(dt, now);
     controls.update();
     renderer.render(scene, camera);
-    /* Keep the page's debug hook able to ask how a sit is bent without
-     * forking viewer.js (vendor-locked). */
-    if (typeof window !== 'undefined' && window.__estate3d) {
-      window.__estate3d.sitProbe = sitProbe;
-      window.__estate3d.focusBench = focusBench;
-      /* Three-quarter framing for checking the knee bend on a sit. */
-      window.__estate3d.focusBenchSide = focusBenchSide;
-    }
     /* the five names are equal fifths of the same clock the light reads;
      * Clock.phaseAt is where that fact lives. */
     const info = Clock.phaseAt(f);
@@ -386,7 +377,7 @@ export function createWorld(ground, canvas, opts) {
   return {
     scene, camera, renderer, controls,
     setState, frame, resize, pick, stateSummary, focusBench, focusPerimeter,
-    focusCell, routeStats, setPhaseView, sitProbe,
+    focusCell, routeStats, setPhaseView,
     phaseIndex: () => phaseInfo.index,
     phaseName: () => phaseInfo.name,
     dayFraction: () => phaseInfo.dayFrac,

@@ -18,8 +18,9 @@ import type { Ev } from "../sim/engine/events.ts";
 import { ROLE_GLYPH, WEATHER_GLYPH, dayLine, full, say } from "./render.ts";
 import type { RunState } from "./runner.ts";
 
-/** The status line where Python names its models (llm.status_line). */
-export const LLM_STATUS = "tier browser — seeded templates, no model";
+/** The status line where Python names its models (llm.status_line).
+ *  hud.js's voiceLine turns `tier X — …` into `AI off · …`. */
+export const LLM_STATUS = "tier browser — seeded templates";
 
 const glyphs = <T extends { glyph?: string }>(o: Record<string, T>) =>
   Object.fromEntries(Object.entries(o).map(([k, v]) => [k, v.glyph ?? null]));

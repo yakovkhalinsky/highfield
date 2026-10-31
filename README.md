@@ -85,7 +85,7 @@ runs its next day, and if any of that fails the estate isn't run and the
 save isn't written over. The page says why, with the seed row on the notice
 so "start over" can still be clicked. If the estate stopped with an error
 last time, the page says on opening which day it stopped on, and that if it
-stops there again "start over" plants it afresh. That mark stays on the
+stops there again, "start over" begins from day 1. That mark stays on the
 save across reloads until a day past it has been saved.
 
 ## Words without a model

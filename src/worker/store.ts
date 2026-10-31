@@ -74,7 +74,7 @@ function db(): Promise<IDBDatabase | null> {
 function why(e: unknown): string {
   const name = (e as { name?: unknown } | null)?.name;
   if (name === "QuotaExceededError") return "storage full";
-  return typeof name === "string" && name ? name : "the save failed";
+  return "the save failed";
 }
 
 type Done<T> = { ok: true; value: T | undefined } | { ok: false; why: string };
