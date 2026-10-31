@@ -90,6 +90,53 @@ export function weekdayName(day: number): string {
 export function yearOf(day: number): number {
   return ifloordiv(day - 1, R.world.days_per_season * 4) + 1;
 }
+
+/** Three months per season (30, 30, 31) so four seasons make 364 days. */
+const MONTH_LEN = [30, 30, 31, 30, 30, 31, 30, 30, 31, 30, 30, 31] as const;
+
+export const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+] as const;
+
+export interface Calendar {
+  year: number; month: number; day: number;
+  monthName: string; weekday: string; season: string;
+}
+
+/** Break an absolute day into year, month and day-of-month on the estate calendar. */
+export function calendarOf(day: number): Calendar {
+  const year = yearOf(day);
+  const daysPerYear = R.world.days_per_season * 4;
+  let doy = imod(day - 1, daysPerYear) + 1;
+  let month = 1;
+  for (const len of MONTH_LEN) {
+    if (doy <= len) {
+      return {
+        year, month, day: doy, monthName: MONTH_NAMES[month - 1]!,
+        weekday: weekdayName(day), season: seasonName(day),
+      };
+    }
+    doy -= len;
+    month++;
+  }
+  return {
+    year, month: 12, day: doy, monthName: MONTH_NAMES[11]!,
+    weekday: weekdayName(day), season: seasonName(day),
+  };
+}
+
+/** Capitalise the first letter of a word (season names, sentence starts). */
+export function capitalise(s: string): string {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+}
+
+/** Header date: weekday, then day Month Year, then the season. */
+export function dateLine(day: number): string {
+  const c = calendarOf(day);
+  return `${c.weekday} · ${c.day} ${c.monthName} · Year ${c.year} · ${capitalise(c.season)}`;
+}
+
 export function phaseNames(): string[] {
   return R.world.phases;
 }

@@ -23,7 +23,7 @@ it("serves page3d's page from any sub-path, with main.ts starting the viewer", (
   expect(map.imports).toEqual({ three: "./3d/vendor/three.module.min.js", "/3d/": "./3d/" });
   for (const id of ["seedIn", "plantBtn", "againBtn", "seedNote"]) expect(html).toContain(`id="${id}"`);
   // the seed row and its style are the only lines added
-  expect(html).toContain(">open</button>");
+  expect(html).toContain(">Open</button>");
   expect(html.split("\n").length).toBe(original.split("\n").length + 15);
 });
 

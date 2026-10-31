@@ -9,6 +9,7 @@
  * parameters (`?static=1`, `?show=…`) pass through untouched.
  */
 import { parseSeed } from "./seed.ts";
+import { capitalise, dateLine } from "./sim/world.ts";
 import { API_PATHS, type FromWorker, type Opened, type ToWorker } from "./worker/protocol.ts";
 
 type Reply = Exclude<FromWorker, { type: "error" } | { type: "saving" }>;
@@ -40,7 +41,7 @@ worker.onmessage = (ev: MessageEvent<FromWorker>) => {
  * WebGL. The overlay covers the HUD, so the seed row moves onto it: "start
  * over" stays in reach. Details go to the console; the panel stays short.
  */
-function stopped(why: string, heading = "the estate stopped"): void {
+function stopped(why: string, heading = "The estate stopped"): void {
   console.error("estate worker:", why);
   const box = document.getElementById("nogl");
   // the vendored page's heading is the viewer's own ("the 3D view cannot start")
@@ -50,9 +51,9 @@ function stopped(why: string, heading = "the estate stopped"): void {
   const panel = box?.querySelector(".noglbox");
   const row = document.querySelector(".seedrow");
   if (text) {
-    text.textContent = heading === "this save cannot be run"
+    text.textContent = heading === "This save cannot be run"
       ? 'Use "start over" below to plant this seed again from day 1.'
-      : heading === "the estate could not open"
+      : heading === "The estate could not open"
       ? "Check the seed, or try again."
       : 'The run stopped. Use "start over" below if it will not open again.';
   }
@@ -103,7 +104,7 @@ let opened = "";
 function savingNote(ok: boolean, why: string): void {
   const note = $("seedNote");
   if (!note) return;
-  const keep = ok ? "saved in this browser" : `not saved (${why})`;
+  const keep = ok ? "Saved in this browser" : `Not saved (${capitalise(why)})`;
   note.textContent = opened ? `${opened} · ${keep}` : keep;
 }
 
@@ -112,15 +113,15 @@ function seedControls(o: Opened): void {
   const note = $("seedNote");
   if (input) input.value = String(o.seed);
   opened = o.broken !== undefined
-    ? "save cannot be run"
+    ? "Save cannot be run"
     : o.crashed !== undefined
-    ? `stopped on day ${o.crashed.toLocaleString("en-AU")} last time`
-    : o.resumed ? `resumed at day ${o.day.toLocaleString("en-AU")}` : "";
+    ? `Stopped on day ${o.crashed.toLocaleString("en-AU")} last time`
+    : o.resumed ? `Resumed · ${dateLine(o.day)}` : "";
   savingNote(o.saving, o.why);
   const go = (fresh: boolean) => {
     const n = parseSeed(input?.value ?? "");
     if (n === null) {
-      if (note) note.textContent = "a seed is a whole number";
+      if (note) note.textContent = "A seed is a whole number";
       return;
     }
     const url = new URL(location.href);
@@ -135,7 +136,7 @@ function seedControls(o: Opened): void {
   if (againBtn) againBtn.onclick = () => {
     const n = parseSeed(input?.value ?? "");
     if (n === null) {
-      if (note) note.textContent = "a seed is a whole number";
+      if (note) note.textContent = "A seed is a whole number";
       return;
     }
     if (confirm(`Start estate ${n} again from day 1? Its saved days are forgotten.`)) go(true);
@@ -159,13 +160,24 @@ async function boot(): Promise<void> {
   seedControls(r);
   if (r.broken !== undefined) {
     console.error(`estate ${r.seed}'s save cannot be run: ${r.broken}`);
-    stopped(r.broken, "this save cannot be run");
+    stopped(r.broken, "This save cannot be run");
     return;
   }
   // Best effort only: the worker already saves after every day and every
   // control, and a page going away cannot wait for the flush to finish.
   addEventListener("pagehide", () => void ask({ type: "flush" }));
   installApi();
+  /* Vendored hud.js still writes "day N · season · weekday". Swap in the
+   * calendar line from the snapshot without forking the HUD. */
+  const HUD = (globalThis as { EstateHUD?: { head?: (st: { date_line?: string }) => void } }).EstateHUD;
+  if (HUD?.head) {
+    const inner = HUD.head.bind(HUD);
+    HUD.head = (st) => {
+      inner(st);
+      const el = document.getElementById("when");
+      if (el && st?.date_line) el.textContent = st.date_line;
+    };
+  }
   const viewer = document.createElement("script");
   viewer.type = "module";
   viewer.src = "3d/viewer.js";
@@ -174,5 +186,5 @@ async function boot(): Promise<void> {
 
 boot().catch((e: unknown) => {
   console.error(e);
-  stopped(e instanceof Error ? e.message : String(e), "the estate could not open");
+  stopped(e instanceof Error ? e.message : String(e), "The estate could not open");
 });

@@ -121,6 +121,7 @@ export function snapshot(s: RunState) {
   return {
     day, season: W.seasonIndex(day), season_name: W.seasonName(day),
     weekday: W.weekdayName(day), year: W.yearOf(day),
+    calendar: W.calendarOf(day), date_line: W.dateLine(day),
     weather: w.weather, weather_left: w.weather_left, wet_days: w.wet_days,
     paused: s.paused, tick_seconds: s.tick_seconds,
     census: W.counts(w),

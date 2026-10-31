@@ -60,9 +60,13 @@ describe.each([[1, 120], [42, 75]])("seed %i, %i days", (seed, days) => {
     expect(state.llm).toBe(LLM_STATUS);
     // the why and the chronicle are seeded templates here, a model's (or
     // chronicler.fallback's) words there; everything else is the same
-    const same = (st: Record<string, unknown>) =>
-      ({ ...st, llm: null, chronicle: null, watcher: { ...(st.watcher as object), why: null } });
+    const same = (st: Record<string, unknown>) => {
+      const { calendar: _c, date_line: _d, ...rest } = st;
+      return { ...rest, llm: null, chronicle: null, watcher: { ...(rest.watcher as object), why: null } };
+    };
     expect(same(state)).toEqual(same(py.state));
+    expect(state.date_line).toBe(W.dateLine(w.day));
+    expect(state.calendar).toEqual(W.calendarOf(w.day));
     expect(state.chronicle).toEqual(s.chronicle.slice(-8));
     expect(state.chronicle.length).toBeGreaterThan(0);
   });

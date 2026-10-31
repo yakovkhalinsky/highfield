@@ -41,10 +41,10 @@ function files(dir: string, at = ""): string[] {
  */
 /** This app's one addition to page3d's controls: which estate, kept or anew. */
 const SEED_ROW = `      <div class="speedrow seedrow">
-        <span class="hint" title="the same seed grows the same estate">seed</span>
-        <input id="seedIn" inputmode="numeric" aria-label="seed" value="">
-        <button id="plantBtn" title="open this seed's estate, where it was left">open</button>
-        <button id="againBtn" title="this seed again from day 1">start over</button>
+        <span class="hint" title="The same seed grows the same estate">Seed</span>
+        <input id="seedIn" inputmode="numeric" aria-label="Seed" value="">
+        <button id="plantBtn" title="Open this seed's estate, where it was left">Open</button>
+        <button id="againBtn" title="This seed again from day 1">Start over</button>
         <span class="note" id="seedNote"></span>
       </div>`;
 const SEED_STYLE = `<style>
