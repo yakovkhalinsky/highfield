@@ -17,7 +17,9 @@ export function createFocus(kit) {
     const torsoMesh = kit.torsoMesh, headMesh = kit.headMesh;
     const thighLMesh = kit.thighLMesh, thighRMesh = kit.thighRMesh;
     const shinLMesh = kit.shinLMesh, shinRMesh = kit.shinRMesh;
+    const footLMesh = kit.footLMesh, footRMesh = kit.footRMesh;
     const armLMesh = kit.armLMesh, armRMesh = kit.armRMesh;
+    const forearmLMesh = kit.forearmLMesh, forearmRMesh = kit.forearmRMesh;
     const fixtureById = kit.fixtureById;
     if (!clock.haveState) return null;
     ndc.set(((clientX - rect.left) / rect.width) * 2 - 1,
@@ -33,7 +35,8 @@ export function createFocus(kit) {
        * behind */
       const hits = raycaster.intersectObjects(
         [torsoMesh, headMesh, thighLMesh, thighRMesh, shinLMesh, shinRMesh,
-         armLMesh, armRMesh], false);
+         footLMesh, footRMesh, armLMesh, armRMesh, forearmLMesh, forearmRMesh],
+        false);
       if (hits.length) {
         const p = personAt[hits[0].instanceId];
         if (p) best = { d: hits[0].distance,

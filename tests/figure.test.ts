@@ -41,6 +41,7 @@ function loadConsts<const N extends string>(names: readonly N[]): { [K in N]: nu
 
 type Pose = {
   hipY: number; torsoZ: number; legRx: number; kneeRx: number; armRx: number;
+  elbowRx: number; footRx: number;
 };
 
 function loadPose(name: "POSE_STAND" | "POSE_SIT"): Pose {
@@ -117,6 +118,15 @@ describe("the visual fork", () => {
     expect(src).toMatch(/kneeRx/);
     expect(src).not.toMatch(/CapsuleGeometry\(0\.055, 0\.22/); // old one-bone leg
   });
+
+  it("adds feet and two-bone arms with elbows", () => {
+    expect(src).toMatch(/footGeo/);
+    expect(src).toMatch(/footLMesh/);
+    expect(src).toMatch(/forearmGeo|FOREARM_HALF/);
+    expect(src).toMatch(/setArmMatrices/);
+    expect(src).toMatch(/elbowRx/);
+    expect(src).toMatch(/footRx/);
+  });
 });
 
 describe("human scale", () => {
@@ -167,6 +177,8 @@ describe("the sit pose", () => {
     expect(sit.legRx).toBeLessThan(0);       // thighs toward +Z / path
     expect(sit.kneeRx).toBeGreaterThan(1.2); // flexion, not straight
     expect(sit.armRx).toBeLessThan(0);       // hands toward thighs / path
+    expect(sit.elbowRx).toBeGreaterThan(stand.elbowRx);
+    expect(sit.footRx).toBeGreaterThan(stand.footRx);
     expect(stand.kneeRx).toBeGreaterThanOrEqual(0);
     expect(stand.kneeRx).toBeLessThan(0.3);
 
@@ -189,8 +201,10 @@ describe("the sit pose", () => {
     expect(backApprox).toBeGreaterThan(-0.11);
   });
 
-  it("lerps every joint the sit uses, including the knee", () => {
+  it("lerps every joint the sit uses, including the knee, elbow and foot", () => {
     expect(src).toMatch(/out\.kneeRx = a\.kneeRx \+ \(b\.kneeRx - a\.kneeRx\) \* t/);
+    expect(src).toMatch(/out\.elbowRx = a\.elbowRx \+ \(b\.elbowRx - a\.elbowRx\) \* t/);
+    expect(src).toMatch(/out\.footRx = a\.footRx \+ \(b\.footRx - a\.footRx\) \* t/);
   });
 });
 
@@ -200,6 +214,12 @@ describe("the walk gait", () => {
     expect(src).toMatch(/d\.kneeR = \(0\.12 \+ Math\.max\(0, stride\)/);
     expect(src).toMatch(/d\.legL = stride \* 0\.55/);
     expect(src).toMatch(/d\.armL = -stride \* 0\.72/);
+  });
+
+  it("locks stride phase to distance walked and eases turns", () => {
+    expect(src).toMatch(/STRIDE_CELLS/);
+    expect(src).toMatch(/along \/ STRIDE_CELLS/);
+    expect(src).toMatch(/slerpYaw/);
   });
 });
 
