@@ -1,6 +1,7 @@
-/** The conductor: one day on the estate — apps/estate/estate/engine/tick.py. */
+/** The conductor: one day on the estate — Highfield realism fork. */
 import * as W from "../world.ts";
 import * as effects from "./effects.ts";
+import { updatePuddles, updateWear } from "./ground.ts";
 import { updateHouseholds } from "./households.ts";
 import * as places from "./places.ts";
 import { updateResidents } from "./residents.ts";
@@ -20,11 +21,13 @@ export function tick(w: W.World): Ev[] {
   rollWeather(w, evs);
   effects.land(w, evs);
   updateWetStreak(w);
+  updatePuddles(w);
   w.daybook.weather = w.weather;
   updateTrees(w, evs);
   places.buildNoise(w);
   places.buildLight(w);
   updateResidents(w, evs);
+  updateWear(w);
   places.updateFixtures(w, evs);
   updateHouseholds(w, evs);
   return evs;

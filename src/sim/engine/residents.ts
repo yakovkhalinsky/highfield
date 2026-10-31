@@ -29,10 +29,40 @@ export type { Cands } from "./needs.ts";
 
 const intKeys = W.ids;
 
+function updateIllness(w: W.World, evs: Ev[]): void {
+  const rng = W.rngFor(w.seed, w.day, "ill");
+  const days = R.engine.ill_days ?? 3;
+  const prob = R.engine.ill_prob ?? 0.08;
+  const stressLine = R.engine.ill_stress ?? 2.5;
+  const mob = R.engine.ill_mobility ?? 0.55;
+  for (const r of Object.values(w.residents)) {
+    const left = (r.ill as number | undefined) ?? 0;
+    if (left > 0) {
+      r.ill = left - 1;
+      r.mobility = Math.min(r.mobility, mob);
+      if ((r.ill as number) <= 0) {
+        r.ill = 0;
+        const hh = w.households[String(r.household)];
+        const kind = hh ? R.households[hh.kind]?.mobility : undefined;
+        r.mobility = kind ?? 1.0;
+      }
+      continue;
+    }
+    const wet = w.weather === "frost" || w.weather === "rain" || w.weather === "storm";
+    const old = r.age >= R.people.ages.elder;
+    if ((r.stress >= stressLine || (wet && old)) && rng.random() < prob) {
+      r.ill = days;
+      r.mobility = mob;
+      evs.push({ day: w.day, kind: "ill", who: r.name || "someone" });
+    }
+  }
+}
+
 export function updateResidents(w: W.World, evs: Ev[]): void {
   const cand = candidates(w);
   const line = R.engine.stress_at!;
   D.overnight(w);
+  updateIllness(w, evs);
   F.settle(w, evs);
   for (const phase of PHASES) {
     drain(w, phase);

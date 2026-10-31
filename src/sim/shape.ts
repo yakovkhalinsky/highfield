@@ -21,6 +21,7 @@ export const FLOAT_FIELDS: ReadonlySet<string> = new Set([
   "$.fates[*].walk_mult",
   "$.fixtures.*.condition",
   "$.households.*.unhappy",
+  "$.residents.*.affinity.*",
   "$.residents.*.mobility",
   "$.residents.*.needs.company",
   "$.residents.*.needs.food",

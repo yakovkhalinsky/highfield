@@ -67,6 +67,7 @@ export function say(ev: Ev): string {
     case "died": return `${str(ev.who, "someone")} died`;
     case "left": return ev.who ? `${String(ev.who)} left the estate` : "a household left the estate";
     case "grew": return `${str(ev.who, "someone")} — ${str(ev.what, "a year older")}`;
+    case "ill": return `${str(ev.who, "someone")} is unwell`;
     default: return str(k, "None");
   }
 }

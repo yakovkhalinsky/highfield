@@ -89,7 +89,14 @@ export function fateWeights(w: W.World): Record<string, number> {
     if (fate === "quiet") {
       wt = 3.0 + 2.0 * fray;
     } else if (spec.stock) {
-      wt = 0.3 + 2.0 * Math.max(0.0, (b.food ?? 0.0) - 1.0);
+      /* Prefer delivery when shelves are bare, not only when food need is high. */
+      let stockFrac = 1.0;
+      for (const fx of Object.values(w.fixtures)) {
+        if (fx.kind !== "shop" || fx.stock === undefined || fx.stock === null) continue;
+        const full = R.fixtures.shop?.stock ?? 150;
+        stockFrac = Math.min(stockFrac, full > 0 ? fx.stock / full : 0);
+      }
+      wt = 0.3 + 2.0 * Math.max(0.0, (b.food ?? 0.0) - 1.0) + 3.0 * (1.0 - stockFrac);
     } else if ((spec.noise_mult ?? 1.0) < 1.0) {
       wt = 0.3 + 2.0 * Math.max(0.0, (b.quiet ?? 0.0) - 1.0) + fray;
     } else if (spec.weather) {

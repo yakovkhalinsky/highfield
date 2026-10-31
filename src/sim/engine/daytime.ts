@@ -44,10 +44,11 @@ export function stopSpots(w: W.World): [number, number][] {
   for (const dy of [-1, 0, 1]) {
     for (const dx of [-1, 0, 1]) {
       const x = s.x + dx, y = s.y + dy;
-      if ((dx || dy) && 0 <= x && x < w.width && 0 <= y && y < w.height &&
-          !taken.has(pk(x, y)) && W.passable(w, x, y)) {
-        ring.push([Math.abs(dx) + Math.abs(dy), y, x]);
-      }
+      if (!(dx || dy) || !(0 <= x && x < w.width && 0 <= y && y < w.height)) continue;
+      if (taken.has(pk(x, y)) || !W.passable(w, x, y)) continue;
+      /* Commuters wait on the footpath / lawn, not the carriageway. */
+      if (w.cells[y]![x]!.site === "road") continue;
+      ring.push([Math.abs(dx) + Math.abs(dy), y, x]);
     }
   }
   ring.sort((a, b) => F.cmpTuple(a, b));
@@ -95,8 +96,18 @@ export function yardSpots(w: W.World): [number, number][] {
 
 // ------------------------------------------------------------- the people
 
+export function onHoliday(w: W.World): boolean {
+  const daysPerYear = R.world.days_per_season * 4;
+  const doy = ((w.day - 1) % daysPerYear) + 1;
+  for (const span of law().holidays ?? []) {
+    const [lo, hi] = span;
+    if (doy >= lo && doy <= hi) return true;
+  }
+  return false;
+}
+
 export function schoolDay(w: W.World): boolean {
-  return law().days.includes(W.weekday(w.day));
+  return law().days.includes(W.weekday(w.day)) && !onHoliday(w);
 }
 
 export function isPupil(r: Res): boolean {
@@ -104,11 +115,28 @@ export function isPupil(r: Res): boolean {
   return lo <= r.age && r.age < hi;
 }
 
-/** Drawn once per person from the seed and kept. The key is added the
- * first time anyone asks, exactly as in Python, since it is in the hash. */
+/** Drawn once per person from the seed and kept. */
 export function hasJob(w: W.World, r: Res): boolean {
   if (!("job" in r)) r.job = W.rngFor(w.seed, 0, `job:${r.id}`).random() < jobs().share;
   return r.job as boolean;
+}
+
+/** On-estate workers (shop / caretaker) instead of bus-away. */
+export function isLocalWorker(w: W.World, r: Res): boolean {
+  if (!isWorker(w, r)) return false;
+  if (!("local_job" in r)) {
+    r.local_job = W.rngFor(w.seed, 0, `local:${r.id}`).random() < (jobs().local_share ?? 0.25);
+  }
+  return r.local_job as boolean;
+}
+
+function localWorkSpot(w: W.World, r: Res): Cand | null {
+  const kinds = ["shop", "bench", "table"] as const;
+  const prefer = W.rngFor(w.seed, 0, `post:${r.id}`).choice([...kinds]);
+  const pool = Object.values(w.fixtures).filter((f) => f.condition > 0 && (f.kind === prefer || f.kind === "shop"));
+  if (!pool.length) return null;
+  const f = pool[W.rngFor(w.seed, w.day, `seat:${r.id}`).randrange(pool.length)]!;
+  return { kind: f.kind, x: f.x, y: f.y, fixture: f, unit: null, duty: "local" };
 }
 
 export function isWorker(w: W.World, r: Res): boolean {
@@ -140,6 +168,9 @@ export function shift(w: W.World, r: Res): readonly string[] {
 export function commuting(w: W.World, r: Res, phase: string): boolean {
   const sh = shift(w, r);
   if (!sh.length || r.where.mode === AWAY) return false;
+  if (isLocalWorker(w, r)) {
+    return phase === jobs().commute || sh.includes(phase);
+  }
   return phase === jobs().commute || sh.includes(phase);
 }
 
@@ -256,14 +287,30 @@ export function duty(w: W.World, party: Res[], phase: string, fetch: readonly Re
       return { kind: "school", x: g.x, y: g.y, fixture: g, unit: null, duty: "run" };
     }
   }
-  if (s !== null && party.length === 1 && commuting(w, lead, phase)) {
-    return { kind: "bus_stop", x: s.x, y: s.y, fixture: s, unit: null, duty: "commute" };
+  if (party.length === 1 && commuting(w, lead, phase)) {
+    if (isLocalWorker(w, lead)) {
+      const spot = localWorkSpot(w, lead);
+      if (spot) return spot;
+    }
+    if (s !== null) {
+      return { kind: "bus_stop", x: s.x, y: s.y, fixture: s, unit: null, duty: "commute" };
+    }
   }
   return null;
 }
 
 export function arrive(w: W.World, party: Res[], c: Cand, phase: string, fetch: readonly Res[]): Res[] {
   const lead = party[0]!;
+  if (c.duty === "local") {
+    lead.where = {
+      mode: "at", unit: homeUnit(w, lead), x: c.x, y: c.y,
+      fixture: c.fixture ? c.fixture.id : null,
+    };
+    lead.side = null;
+    meet(w, lead, jobs().meets);
+    if (c.fixture) tally(c.fixture);
+    return [...party];
+  }
   if (c.duty === "commute") {
     const [x, y] = waitAt(w);
     lead.where = { mode: AWAY, unit: homeUnit(w, lead), x, y, fixture: null };

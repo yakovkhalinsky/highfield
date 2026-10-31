@@ -72,15 +72,19 @@ export function buildNoise(w: W.World): W.Cell[][] {
 
 export function buildLight(w: W.World): void {
   const grid: number[][] = Array.from({ length: w.height }, () => new Array<number>(w.width).fill(0.0));
+  const darkEstate = Object.values(w.buildings).some((b) => b.power === false);
   for (const f of Object.values(w.fixtures)) {
     const emit = R.fixtures[f.kind]!.light ?? 0.0;
     if (!emit || f.condition <= 0) continue;
+    /* Street lamps dim when a power cut covers the estate (regional cuts
+     * still darken nearby glow via building.power on the visual side). */
+    const scale = darkEstate && f.kind === "lamp" ? 0.15 : 1.0;
     for (const dy of [-2, -1, 0, 1, 2]) {
       for (const dx of [-2, -1, 0, 1, 2]) {
         const x = f.x + dx, y = f.y + dy;
         if (W.inBounds(w, x, y)) {
           const d = Math.abs(dx) + Math.abs(dy);
-          grid[y]![x]! += emit * Math.max(0.0, 1.0 - d / 3.0);
+          grid[y]![x]! += emit * scale * Math.max(0.0, 1.0 - d / 3.0);
         }
       }
     }
@@ -123,7 +127,8 @@ export function updateFixtures(w: W.World, evs: Ev[]): void {
       evs.push({ day: w.day, kind: "broke", what: f.kind, x: f.x, y: f.y });
       if (w.daybook !== undefined && w.daybook !== null) w.daybook.broke += 1;
     }
-    if (spec.supplied) f.stock = spec.stock ?? 150;
+    /* Highfield: supplied means delivery-eligible; stock persists overnight
+     * until a delivery fate refills it (effects.land). */
     f.occupants = [];
   }
 }

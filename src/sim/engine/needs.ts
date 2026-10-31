@@ -69,7 +69,16 @@ export function pressure(w: W.World, r: Res, need: string, phase: string): numbe
   if (spec.roles !== undefined && !spec.roles.includes(r.role)) return 0.0;
   const mult = drainsOf(w, r)[need] ?? 1.0;
   let p = spec.urge * r.needs[need]! * phaseMult(need, phase) * weekMult(need, w.day) * mult;
-  if (!spec.home) p *= R.weather.outdoor[w.weather] ?? 1.0;
+  if (!spec.home) {
+    p *= R.weather.outdoor[w.weather] ?? 1.0;
+    /* Seasonal outdoor life (G8): summer evenings pull company/play out;
+     * winter keeps people nearer home. */
+    const season = W.seasonName(w.day);
+    if ((need === "company" || need === "play") && season === "summer" &&
+        (phase === "evening" || phase === "afternoon")) p *= 1.25;
+    if (!spec.home && season === "winter") p *= 0.85;
+  }
+  if ((r.ill as number | undefined) && (r.ill as number) > 0 && need === "rest") p *= 1.4;
   return p;
 }
 
@@ -90,7 +99,7 @@ export function rankedNeeds(w: W.World, r: Res, phase: string): string[] {
   return out;
 }
 
-function utility(w: W.World, r: Res, c: Cand, need: string, phase: string, rng: PyRandom): number | null {
+export function utility(w: W.World, r: Res, c: Cand, need: string, phase: string, rng: PyRandom): number | null {
   const [px, py] = pos(w, r);
   const unit = unitOf(w, r);
   const inside = r.where.mode === "in";
@@ -99,7 +108,13 @@ function utility(w: W.World, r: Res, c: Cand, need: string, phase: string, rng: 
   let cost: number;
   if (c.kind === "home") {
     if (unit === null || c.unit!.id !== unit.id) return null;
-    eff = R.engine.home_rest! * c.unit!.condition;
+    if (need === "food") {
+      const hh = w.households[String(r.household)];
+      if (!hh || (hh.food_stock ?? 0) <= 0) return null;
+      eff = (R.engine.home_food ?? 0.72) * c.unit!.condition;
+    } else {
+      eff = R.engine.home_rest! * c.unit!.condition;
+    }
     eff *= 1.0 + 0.35 * wetness(w);
     if (need === "quiet") eff *= Math.max(0.05, 1.0 - P.unitNoise(w, c.unit!));
     cost = 0.0;
@@ -113,6 +128,13 @@ function utility(w: W.World, r: Res, c: Cand, need: string, phase: string, rng: 
     if (w.weather === "heat") eff *= 1.0 + 0.8 * shade;
     if (need === "quiet") eff *= 0.4 + 0.6 * shade;
     if (phase === "evening" || phase === "night") eff *= 1.0 + 0.7 * w.cells[f.y]![f.x]!.light;
+    /* Company prefers people you already spend time with (G11). */
+    if (need === "company" && f.occupants.length) {
+      const aff = (r.affinity as Record<string, number> | undefined) ?? {};
+      let boost = 0;
+      for (const oid of f.occupants) boost = Math.max(boost, aff[String(oid)] ?? 0);
+      eff += (R.engine.affinity_company ?? 0.35) * boost;
+    }
     const d = Math.abs(c.x - px) + Math.abs(c.y - py);
     if (d > R.engine.scan!) return null;
     cost = d * R.engine.travel_cost! + (inside && unit ? unit.floor * stair : 0);
@@ -121,17 +143,35 @@ function utility(w: W.World, r: Res, c: Cand, need: string, phase: string, rng: 
   return eff - cost + habit + rng.random() * R.engine.whim!;
 }
 
+function bumpAffinity(a: Res, b: Res): void {
+  if (a.id === b.id) return;
+  const gain = R.engine.affinity_gain ?? 0.15;
+  const aa = (a.affinity as Record<string, number>) ?? (a.affinity = {});
+  const bb = (b.affinity as Record<string, number>) ?? (b.affinity = {});
+  aa[String(b.id)] = Math.min(1.0, (aa[String(b.id)] ?? 0) + gain);
+  bb[String(a.id)] = Math.min(1.0, (bb[String(a.id)] ?? 0) + gain);
+}
+
 function satisfyBase(w: W.World, r: Res, c: Cand, need: string, phase: string): void {
   r.habit[phase] = c.kind;
   const full = R.engine.need_max! * R.engine.arrive_restore!;
   if (c.kind === "home") {
-    r.needs[need] = Math.max(0.0, r.needs[need]! - full * R.engine.home_rest!);
+    const homeEff = need === "food" ? (R.engine.home_food ?? 0.72) : R.engine.home_rest!;
+    r.needs[need] = Math.max(0.0, r.needs[need]! - full * homeEff);
+    if (need === "food") {
+      const hh = w.households[String(r.household)];
+      if (hh && (hh.food_stock ?? 0) > 0) hh.food_stock = (hh.food_stock ?? 0) - 1;
+    }
     return;
   }
   const f = c.fixture!;
   const restore = full * P.baseQuality(f.kind, need, f);
   r.needs[need] = Math.max(0.0, r.needs[need]! - restore);
   r.where.fixture = f.id;
+  for (const oid of f.occupants) {
+    const other = w.residents[String(oid)];
+    if (other) bumpAffinity(r, other);
+  }
   f.occupants.push(r.id);
   f.uses_today = (f.uses_today ?? 0) + 1;
   f.use_total += 1;
@@ -142,6 +182,12 @@ function satisfyBase(w: W.World, r: Res, c: Cand, need: string, phase: string): 
   if (need === "food" && f.stock !== undefined && f.stock !== null && f.stock > 0) {
     f.stock -= 1;
     if (f.stock <= 0 && w.daybook) w.daybook.sold_out = true;
+    const hh = w.households[String(r.household)];
+    if (hh) {
+      const cap = R.engine.pantry ?? 8;
+      const add = R.engine.shop_pantry ?? 3;
+      hh.food_stock = Math.min(cap, (hh.food_stock ?? 0) + add);
+    }
   }
 }
 

@@ -75,7 +75,7 @@ export function dayFeed(w: W.World, events: Ev[], books: RunState["daybooks"], d
     const line = dayLine(books[d]);
     const says = byDay.get(d) ?? [];
     if (!line && !says.length) continue;
-    out.push({ day: d, says, line });
+    out.push({ day: d, label: W.dateShort(d), says, line });
   }
   return out;
 }
@@ -113,9 +113,13 @@ export function snapshot(s: RunState) {
   }));
   const shade: number[] = [];
   const light: number[] = [];
+  const wear: number[] = [];
+  const puddle: number[] = [];
   for (const row of w.cells) {
     shade.push(...small(row.map((c) => c.shade)));
     light.push(...small(row.map((c) => c.light)));
+    wear.push(...small(row.map((c) => c.wear ?? 0)));
+    puddle.push(...small(row.map((c) => c.puddle ?? 0)));
   }
   const book = w.day_phases as { day: number; phases: unknown } | null | undefined;
   return {
@@ -131,7 +135,7 @@ export function snapshot(s: RunState) {
     people, fixtures, buildings,
     daytime: daytime.roll(w),
     phases: book && book.day === day ? { day, order: [...PHASES], at: book.phases ?? {} } : null,
-    shade, light,
+    shade, light, wear, puddle,
     events: s.events.slice(-60).map((e) => ({ ...e, say: say(e) })),
     days: dayFeed(w, s.events, s.daybooks),
     watcher: { ...s.last_watch },

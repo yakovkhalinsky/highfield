@@ -13,7 +13,7 @@
  },
  "sites": {
   "road": {
-   "walk": 1.0,
+   "walk": 4.0,
    "noise": 0.55,
    "glyph": "⬛"
   },
@@ -64,7 +64,8 @@
     "evening": 1.7,
     "night": 0.4
    },
-   "weekend": 0.9
+   "weekend": 0.9,
+   "home": true
   },
   "rest": {
    "urge": 0.9,
@@ -151,7 +152,7 @@
     "company": 0.6,
     "rest": 0.2
    },
-   "capacity": 4,
+   "capacity": 6,
    "decay": 0.00025,
    "loud": 0.03,
    "carry": 3,
@@ -308,7 +309,7 @@
   "benches": 7,
   "perimeter_path": true,
   "perimeter_benches": 10,
-  "tables": 2,
+  "tables": 5,
   "trees": 16,
   "lamps": 9,
   "shop": true,
@@ -598,7 +599,20 @@
   "habit_bonus": 0.22,
   "whim": 0.18,
   "home_rest": 0.62,
-  "quiet_gain": 0.09
+  "quiet_gain": 0.09,
+  "pantry": 8,
+  "shop_pantry": 3,
+  "home_food": 0.72,
+  "wear_step": 0.004,
+  "puddle_wet": 0.12,
+  "unit_wear": 0.0008,
+  "unit_repair": 0.02,
+  "ill_stress": 2.5,
+  "ill_days": 3,
+  "ill_mobility": 0.55,
+  "ill_prob": 0.08,
+  "affinity_gain": 0.15,
+  "affinity_company": 0.35
  },
  "families": {
   "young_under": 10,
@@ -640,10 +654,17 @@
    "company": 0.7,
    "play": 0.6
   },
-  "per_yard_cell": 2
+  "per_yard_cell": 2,
+  "holidays": [
+   [60, 74],
+   [150, 164],
+   [240, 254],
+   [330, 350]
+  ]
  },
  "work": {
   "share": 0.6,
+  "local_share": 0.25,
   "commute": "dawn",
   "shift": [
    "morning",

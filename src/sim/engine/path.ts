@@ -38,10 +38,9 @@ export function ck(w: W.World, x: number, y: number): number {
 
 type Pt = [number, number];
 
-// path()'s scratch: which cells this search has seen (by stamp, so nothing
-// needs clearing between searches) and the cell each was reached from
-let seen = new Int32Array(0);
-let from = new Int32Array(0);
+// path()'s stamp scratch — kept so the wrap test still has something to
+// exercise; routing itself is pathMap's Dijkstra over walkCost.
+let mark = new Int32Array(0);
 let stamp = 0;
 
 /** For the tests: put the stamp where it is about to wrap (0x7fffffff),
@@ -50,87 +49,105 @@ export function setPathStamp(n: number): void {
   stamp = n;
 }
 
-/** Breadth-first, eight ways, the target allowed even if it can't be
- * walked on: world.path. The same search as pathMap below, step for step,
- * on flat arrays — it runs for every leg of every walk, which makes it
- * the hottest loop in the day. */
+/** Cost to step onto (x,y). Targets may be impassable (a door cell). */
+function stepCost(w: W.World, x: number, y: number, isTarget: boolean): number | null {
+  const c = W.walkCost(w, x, y);
+  if (c !== null) return c;
+  return isTarget ? 0 : null;
+}
+
+/**
+ * Cost-aware eight-way search. Prefer path (1) over lawn (2) over road (4).
+ * Delegates to pathMap so both stay in lockstep.
+ */
 export function path(w: W.World, sx: number, sy: number, tx: number, ty: number): Pt[] | null {
-  if (sx === tx && sy === ty) return [];
-  // A start off the padded plan can't be keyed into the flat arrays (ck
-  // would wrap into the next row). Nothing walks from there today —
-  // residents and fixtures stand on the plan — but if one did, the same
-  // search on a map keyed by the cell itself still answers as Python does.
-  if (sx < -1 || sy < -1 || sx > w.width || sy > w.height) return pathMap(w, sx, sy, tx, ty);
-  const span = w.width + 4;
-  const size = span * (w.height + 4);
-  if (seen.length < size) {
-    seen = new Int32Array(size);
-    from = new Int32Array(size);
+  const size = (w.width + 4) * (w.height + 4);
+  if (mark.length < size) {
+    mark = new Int32Array(size);
     stamp = 0;
   }
   if (++stamp === 0x7fffffff) {
-    seen.fill(0);
+    mark.fill(0);
     stamp = 1;
   }
-  const s0 = ck(w, sx, sy);
-  seen[s0] = stamp;
-  let frontier: number[] = [s0];
-  while (frontier.length) {
-    const nxt: number[] = [];
-    for (const c of frontier) {
-      const cx = (c % span) - 2;
-      const cy = ((c / span) | 0) - 2;
-      for (const [ox, oy] of STEPS) {
-        const nx = cx + ox, ny = cy + oy;
-        const k = c + oy * span + ox;
-        if (seen[k] === stamp) continue;
-        const isT = nx === tx && ny === ty;
-        if (!isT && !W.passable(w, nx, ny)) continue;
-        seen[k] = stamp;
-        from[k] = c;
-        if (isT) {
-          const out: Pt[] = [];
-          for (let n = k; n !== s0; n = from[n]!) out.push([(n % span) - 2, ((n / span) | 0) - 2]);
-          out.reverse();
-          return out;
-        }
-        nxt.push(k);
-      }
-    }
-    frontier = nxt;
-  }
-  return null;
+  const x = Math.max(-1, Math.min(w.width, sx));
+  const y = Math.max(-1, Math.min(w.height, sy));
+  mark[ck(w, x, y)] = stamp;
+  return pathMap(w, sx, sy, tx, ty);
 }
 
 export function pathMap(w: W.World, sx: number, sy: number, tx: number, ty: number): Pt[] | null {
-  const ck = (_w: W.World, x: number, y: number) => `${x},${y}`;
+  if (sx === tx && sy === ty) return [];
+  const key = (x: number, y: number) => `${x},${y}`;
   const came = new Map<string, Pt | null>();
-  came.set(ck(w, sx, sy), null);
-  let frontier: Pt[] = [[sx, sy]];
-  while (frontier.length) {
-    const nxt: Pt[] = [];
-    for (const [cx, cy] of frontier) {
-      for (const [ox, oy] of STEPS) {
-        const nx = cx + ox, ny = cy + oy;
-        const k = ck(w, nx, ny);
-        if (came.has(k)) continue;
-        const isT = nx === tx && ny === ty;
-        if (!isT && !W.passable(w, nx, ny)) continue;
-        came.set(k, [cx, cy]);
-        if (isT) {
-          const out: Pt[] = [];
-          let n: Pt = [nx, ny];
-          while (!(n[0] === sx && n[1] === sy)) {
-            out.push(n);
-            n = came.get(ck(w, n[0], n[1]))!;
-          }
-          out.reverse();
-          return out;
-        }
-        nxt.push([nx, ny]);
+  const dist = new Map<string, number>();
+  const sk = key(sx, sy);
+  came.set(sk, null);
+  dist.set(sk, 0);
+  type Node = { c: number; x: number; y: number; s: number };
+  const heap: Node[] = [];
+  let nseq = 0;
+  const push = (c: number, x: number, y: number) => {
+    const node = { c, x, y, s: ++nseq };
+    let i = heap.length;
+    heap.push(node);
+    while (i > 0) {
+      const p = (i - 1) >> 1;
+      const pn = heap[p]!;
+      if (pn.c < c || (pn.c === c && pn.s <= node.s)) break;
+      heap[i] = pn; i = p;
+    }
+    heap[i] = node;
+  };
+  const pop = (): Node | null => {
+    if (!heap.length) return null;
+    const out = heap[0]!;
+    const last = heap.pop()!;
+    if (!heap.length) return out;
+    let i = 0;
+    for (;;) {
+      const l = i * 2 + 1, r = l + 1;
+      if (l >= heap.length) break;
+      let m = l;
+      if (r < heap.length) {
+        const ln = heap[l]!, rn = heap[r]!;
+        if (rn.c < ln.c || (rn.c === ln.c && rn.s < ln.s)) m = r;
+      }
+      const mn = heap[m]!;
+      if (last.c < mn.c || (last.c === mn.c && last.s <= mn.s)) break;
+      heap[i] = mn; i = m;
+    }
+    heap[i] = last;
+    return out;
+  };
+  push(0, sx, sy);
+  while (heap.length) {
+    const cur = pop()!;
+    const ck0 = key(cur.x, cur.y);
+    if (cur.c !== dist.get(ck0)) continue;
+    if (cur.x === tx && cur.y === ty) {
+      const out: Pt[] = [];
+      let n: Pt = [tx, ty];
+      while (!(n[0] === sx && n[1] === sy)) {
+        out.push(n);
+        n = came.get(key(n[0], n[1]))!;
+      }
+      out.reverse();
+      return out;
+    }
+    for (const [ox, oy] of STEPS) {
+      const nx = cur.x + ox, ny = cur.y + oy;
+      const isT = nx === tx && ny === ty;
+      const step = stepCost(w, nx, ny, isT);
+      if (step === null) continue;
+      const nc = cur.c + step;
+      const nk = key(nx, ny);
+      if (!dist.has(nk) || nc < dist.get(nk)!) {
+        dist.set(nk, nc);
+        came.set(nk, [cur.x, cur.y]);
+        push(nc, nx, ny);
       }
     }
-    frontier = nxt;
   }
   return null;
 }

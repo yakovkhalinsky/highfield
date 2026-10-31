@@ -65,6 +65,14 @@ function news(w: W.World, evs: Ev[]): Beat[] {
         : `there were ${count(n)} deaths on the estate: ${list(died)}`],
     ] });
   }
+  const ill = names(by("ill"));
+  if (ill.length) {
+    const n = ill.length;
+    out.push({ weight: 5, options: [
+      ["ill:0", n === 1 ? `${ill[0]} is unwell` : `${list(ill)} are unwell`],
+      ["ill:1", `illness on the estate: ${list(ill)}`],
+    ] });
+  }
   const born = names(by("born"), "a child");
   if (born.length) {
     const n = born.length;

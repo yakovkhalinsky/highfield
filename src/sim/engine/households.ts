@@ -206,12 +206,28 @@ export function arrivals(w: W.World): { kind: string } | undefined {
 
 // -------------------------------------------------------------- conductor
 
+/** Slow wear and quiet drift on lived-in flats (G10). */
+export function maintainUnits(w: W.World): void {
+  const wear = R.engine.unit_wear ?? 0.0008;
+  const repair = R.engine.unit_repair ?? 0.02;
+  for (const u of Object.values(w.units)) {
+    if (u.household === null) {
+      u.condition = Math.min(1.0, u.condition + repair * 0.25);
+      continue;
+    }
+    const noise = Math.max(0, 1.0 - u.quiet_base);
+    u.condition = Math.max(0.35, u.condition - wear * (1.0 + noise));
+    u.quiet_base = Math.max(0.2, Math.min(0.95, u.quiet_base - wear * 0.5 * noise + repair * 0.01 * (1.0 - u.condition)));
+  }
+}
+
 export function updateHouseholds(w: W.World, evs: Ev[]): void {
   if (w.day % (R.world.days_per_season * 4) === 0) {
     agePeople(w, evs);
     oldAge(w, evs);
     births(w, evs);
   }
+  maintainUnits(w);
   unhappiness(w);
   emigration(w, evs);
   turnover(w, evs);

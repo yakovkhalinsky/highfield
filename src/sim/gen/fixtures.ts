@@ -130,13 +130,17 @@ export function placeFixtures(ground: Ground): void {
   ];
   for (const [kind, spots] of plan) for (const [x, y] of spots) place(kind, x, y);
 
-  // trees on the open lawns
+  // trees on open lawns inside the road ring (not the outer apron)
+  const treeLo = rw + 1;
+  const treeHiX = w - rw - 2;
+  const treeHiY = h - rw - 2;
   let planted = 0;
   let tries = 0;
   while (planted < g.trees && tries < 400) {
     tries += 1;
     const x = rng.randrange(w);
     const y = rng.randrange(h);
+    if (x < treeLo || x > treeHiX || y < treeLo || y > treeHiY) continue;
     if (cells[y]![x]!.site !== "lawn" || taken.has(key(x, y)) || clear.has(key(x, y))) continue;
     let near = false;
     for (const dx of [-1, 0, 1]) {
