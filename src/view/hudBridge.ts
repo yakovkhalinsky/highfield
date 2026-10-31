@@ -74,6 +74,16 @@ function ensureFeedDateStyle(): void {
 }
 
 /**
+ * Vendored head() always writes "day N · season · weekday". Swap in the
+ * calendar line when the snapshot carries one. update() calls its local
+ * head (not EstateHUD.head), so this must run after update as well as head.
+ */
+export function applyDateLine(st: PhaseState | null | undefined): void {
+  const el = typeof document !== "undefined" ? document.getElementById("when") : null;
+  if (el && st?.date_line) el.textContent = st.date_line;
+}
+
+/**
  * Patch EstateHUD in place: shared phaseView, clock-aware cards, calendar
  * date_line on the header, calendar labels in the days feed. Returns the
  * clock-phase getter used by cards.
@@ -102,17 +112,18 @@ export function installHudBridge(HUD: EstateHUD | undefined): { clockPhase: () =
     const inner = HUD.head.bind(HUD);
     HUD.head = (st) => {
       inner(st);
-      const el = document.getElementById("when");
-      if (el && st?.date_line) el.textContent = st.date_line;
+      applyDateLine(st);
     };
   }
 
   /* hud.js closes over Patch.write at load, so wrapping Patch later is a
-   * no-op — relabel after each panel write instead. */
+   * no-op — relabel after each panel write instead. update() also calls
+   * its local head(), bypassing the wrapped EstateHUD.head. */
   if (HUD.update) {
     const inner = HUD.update.bind(HUD);
     HUD.update = (st) => {
       inner(st);
+      applyDateLine(st);
       applyCalendarLabels();
     };
   }
@@ -120,6 +131,7 @@ export function installHudBridge(HUD: EstateHUD | undefined): { clockPhase: () =
     const inner = HUD.tab.bind(HUD);
     HUD.tab = (name, st) => {
       inner(name, st);
+      if (st) applyDateLine(st);
       applyCalendarLabels();
     };
   }
