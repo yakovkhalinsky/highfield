@@ -52,43 +52,74 @@ export function createWeather(kit) {
 
   let rainAmount = 0, snowAmount = 0;
 
+  let storm = false;
+  let heatAmount = 0;
+  const heatPos = new Float32Array(400 * 3);
+  for (let i = 0; i < 400; i++) {
+    heatPos[i * 3] = Math.random() * (W + 4) - 2;
+    heatPos[i * 3 + 1] = 0.4 + Math.random() * 4;
+    heatPos[i * 3 + 2] = Math.random() * (H + 4) - 2;
+  }
+  const heatGeo = new THREE.BufferGeometry();
+  const heatAttr = new THREE.BufferAttribute(heatPos, 3);
+  heatGeo.setAttribute('position', heatAttr);
+  heatGeo.setDrawRange(0, 0);
+  const heatMat = new THREE.PointsMaterial({
+    color: 0xffe0a0, size: 0.2, transparent: true, opacity: 0.22,
+    depthWrite: false, sizeAttenuation: true,
+  });
+  const heat = new THREE.Points(heatGeo, heatMat);
+  heat.frustumCulled = false;
+  heat.visible = false;
+  scene.add(heat);
+
   function syncWeather(st) {
     const weather = st.weather || 'clear';
     rainAmount = weather === 'rain' ? 800 : weather === 'storm' ? RAIN_MAX : 0;
+    storm = weather === 'storm';
     /* Frost is mainly white ground; a light flake accent, not a blizzard. */
-    snowAmount = weather === 'frost' ? Math.min(180, SNOW_MAX) : 0;
+    snowAmount = weather === 'frost' ? Math.min(220, SNOW_MAX) : 0;
+    heatAmount = weather === 'heat' ? 280 : 0;
     rainGeo.setDrawRange(0, rainAmount * 2);
     snowGeo.setDrawRange(0, snowAmount);
+    heatGeo.setDrawRange(0, heatAmount);
     rain.visible = rainAmount > 0;
     snow.visible = snowAmount > 0;
+    heat.visible = heatAmount > 0;
+    rainMat.opacity = storm ? 0.62 : 0.48;
     /* wet paving picks up the sky env; frost stays matte */
     const wet = weather === 'rain' || weather === 'storm';
-    tileMat.roughness = wet ? 0.42 : weather === 'frost' ? 0.98 : 0.96;
+    tileMat.roughness = wet ? 0.42 : weather === 'frost' ? 0.98 : weather === 'heat' ? 0.88 : 0.96;
     tileMat.metalness = wet ? 0.12 : 0.0;
     paneMat.roughness = wet ? 0.08 : 0.18;
   }
 
   function updateWeather(dt, now) {
     if (rainAmount) {
-      const fall = 12 * dt;
+      const fall = (storm ? 18 : 12) * dt;
+      const slant = storm ? 0.35 : 0.08;
       for (let i = 0; i < rainAmount; i++) {
         const j = i * 6;
         rainPos[j + 1] -= fall;
+        rainPos[j] -= slant * fall;
+        rainPos[j + 3] = rainPos[j] + slant * 0.55;
         rainPos[j + 4] = rainPos[j + 1] - 0.55;
+        rainPos[j + 5] = rainPos[j + 2];
         if (rainPos[j + 1] < 0) {
           const x = Math.random() * (W + 4) - 2;
           const z = Math.random() * (H + 4) - 2;
           rainPos[j] = x; rainPos[j + 1] = 16; rainPos[j + 2] = z;
-          rainPos[j + 3] = x; rainPos[j + 4] = 15.45; rainPos[j + 5] = z;
+          rainPos[j + 3] = x + slant * 0.55; rainPos[j + 4] = 15.45; rainPos[j + 5] = z;
         }
       }
       rainAttr.needsUpdate = true;
     }
     if (snowAmount) {
+      const wind = 0.012;
       for (let i = 0; i < snowAmount; i++) {
         const j = i * 3;
         snowPos[j + 1] -= 1.3 * dt;
-        snowPos[j] += Math.sin(now * 0.001 + i * 0.7) * 0.006;
+        snowPos[j] += Math.sin(now * 0.001 + i * 0.7) * 0.006 + wind;
         if (snowPos[j + 1] < 0) {
           snowPos[j] = Math.random() * (W + 4) - 2;
           snowPos[j + 1] = 16;
@@ -96,6 +127,19 @@ export function createWeather(kit) {
         }
       }
       snowAttr.needsUpdate = true;
+    }
+    if (heatAmount) {
+      for (let i = 0; i < heatAmount; i++) {
+        const j = i * 3;
+        heatPos[j + 1] += 0.6 * dt;
+        heatPos[j] += Math.sin(now * 0.002 + i) * 0.01;
+        if (heatPos[j + 1] > 5) {
+          heatPos[j] = Math.random() * (W + 4) - 2;
+          heatPos[j + 1] = 0.3;
+          heatPos[j + 2] = Math.random() * (H + 4) - 2;
+        }
+      }
+      heatAttr.needsUpdate = true;
     }
   }
 

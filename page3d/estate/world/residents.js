@@ -304,6 +304,14 @@ export function createResidents(kit) {
           toZ[i] += (seatFz[i] / fl) * SIT_FORWARD;
         }
       }
+      /* Bus shelter perch: waiters sit on the stop's seat. */
+      const waitFx = p.fixture != null && kit.fixtureById
+        ? kit.fixtureById[p.fixture] : null;
+      if (sitMode[i] !== 1 && waitFx && waitFx.kind === 'bus_stop' && !p.in) {
+        sitMode[i] = 1;
+        seatFx[i] = 0; seatFz[i] = 1;
+        kit.seatedCount++;
+      }
       if (!p.in) spotNow[p.id] = { cell: p.x + ',' + p.y, x: toX[i], z: toZ[i] };
     }
     prevSpot = spotNow;

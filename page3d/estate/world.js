@@ -277,7 +277,7 @@ export function createWorld(ground, canvas, opts) {
   function paintState(st) {
     if (!st) return;
     kit.weather = st.weather || 'clear';
-    const key = st.day + ':' + st.season + ':' + (st.weather || '');
+    const key = st.day + ':' + st.season + ':' + (st.weather || '') + ':' + (st.wet_days || 0);
     if (key !== groundKey) {
       groundKey = key;
       paintGround(st);
@@ -290,7 +290,7 @@ export function createWorld(ground, canvas, opts) {
     /* who is at home may have changed; the windows are painted here at
      * the hour the last frame drew, and the next frame moves them on if
      * the light has moved a step */
-    paintWindows(kit.windowDark);
+    paintWindows(kit.windowDark, st);
     kit.occupancyDirty = false;
     lastNow = performance.now();
   }
@@ -337,7 +337,7 @@ export function createWorld(ground, canvas, opts) {
     if (step !== windowStep || kit.occupancyDirty) {
       windowStep = step;
       kit.occupancyDirty = false;
-      paintWindows(step / kit.WINDOW_STEPS);
+      paintWindows(step / kit.WINDOW_STEPS, baseState);
     }
     /* people do not become part of the scenery after dark: the same small
      * warm emissive keeps an outside figure legible at night */

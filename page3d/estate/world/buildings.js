@@ -421,14 +421,24 @@ export function createBuildings(kit) {
   };
   kit.windowDark = 0;
 
-  function paintWindows(dark) {
+  function paintWindows(dark, st) {
     if (!windowSlots.length) return;
     const windowDark = clamp01(dark);
     kit.windowDark = windowDark;
+    const powerByBuilding = {};
+    ((st && st.buildings) || []).forEach((b) => {
+      powerByBuilding[b.id] = b.power !== false;
+    });
+    const unitBuilding = (kit.ground && kit.ground.units) || {};
     for (let i = 0; i < windowSlots.length; i++) {
       const s = windowSlots[i];
-      const key = s.unit != null && occupied.has(s.unit) ? 'lived'
-                : s.shop ? 'shop' : 'pane';
+      let key = s.unit != null && occupied.has(s.unit) ? 'lived'
+              : s.shop ? 'shop' : 'pane';
+      /* Power cuts kill warm window light for that block. */
+      if (key === 'lived' && s.unit != null) {
+        const ub = unitBuilding[String(s.unit)];
+        if (ub && powerByBuilding[ub.b] === false) key = 'pane';
+      }
       _c1.lerpColors(WIN_DAY[key], WIN_NIGHT[key], windowDark);
       windowMesh.setColorAt(i, _c1);
     }

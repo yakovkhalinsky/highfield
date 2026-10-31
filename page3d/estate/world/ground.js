@@ -85,11 +85,15 @@ export function createGround(kit) {
     const season = Math.max(0, Math.min(3, (st && st.season) || 0));
     const pal = SEASONS[season];
     const shade = (st && st.shade) || null;
+    const wear = (st && st.wear) || null;
+    const puddle = (st && st.puddle) || null;
     const frost = (st && st.weather) === 'frost';
+    const heat = (st && st.weather) === 'heat';
     /* the apron is the same living ground, muted and hazed so it reads as
      * distance rather than as a second, flatter estate */
     _c1.setHex(pal.lawn).lerp(_haze, 0.38).multiplyScalar(0.84);
     if (frost) _c1.lerp(new THREE.Color(0xe8eef2), 0.55);
+    if (heat) _c1.lerp(new THREE.Color(0xe8cfa0), 0.22);
     baseMat.color.copy(_c1);
     for (let y = 0; y < H; y++) {
       for (let x = 0; x < W; x++) {
@@ -108,6 +112,16 @@ export function createGround(kit) {
         /* Frost: the estate wakes white — whiten living ground, leave water. */
         if (frost && site !== 'water' && site !== 'building' && site !== 'road') {
           _c1.lerp(new THREE.Color(0xe8eef2), site === 'lawn' || site === 'play' ? 0.72 : 0.4);
+        }
+        if (heat && site !== 'water' && site !== 'building') {
+          _c1.lerp(new THREE.Color(0xe0c080), 0.18);
+        }
+        /* Wear darkens paths; puddles cool and darken paving. */
+        if (wear && (site === 'path' || site === 'road')) {
+          _c1.multiplyScalar(1 - Math.min(0.35, (wear[i] || 0) * 0.04));
+        }
+        if (puddle && (puddle[i] || 0) > 0 && site !== 'water' && site !== 'building') {
+          _c1.lerp(new THREE.Color(0x4a6a7a), Math.min(0.55, (puddle[i] || 0) * 0.07));
         }
         tiles.setColorAt(i, _c1);
       }

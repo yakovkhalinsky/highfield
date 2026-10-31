@@ -227,10 +227,16 @@ export function createFixtures(kit) {
     } else if (f.kind === 'shop') {
       const wood = fixtureMaterial(0xcf9f60, 0.8);
       mats.push(wood);
-      /* the shop's front: a low wooden plinth before its door, one step
-       * high, that its customers step up onto (it was a waist-high
-       * counter they walked through) */
+      /* plinth step + a light awning so the stall reads as a shop front
+       * without blocking the walk solid (Crowd still owns the step). */
       addBox(g, wood.mat, 0.9, STEP_H, 0.9, 0, STEP_H / 2, 0);
+      const cloth = fixtureMaterial(0xb05040, 0.7);
+      mats.push(cloth);
+      addBox(g, cloth.mat, 1.05, 0.04, 0.55, 0, 1.15, 0.1);
+      const post = fixtureMaterial(0x6a4a30, 0.85);
+      mats.push(post);
+      addBox(g, post.mat, 0.05, 1.1, 0.05, -0.45, 0.55, 0.28);
+      addBox(g, post.mat, 0.05, 1.1, 0.05, 0.45, 0.55, 0.28);
     } else {
       /* a kind the page has never seen: a small plinth in its own colour,
        * so the estate still shows that something is there */
@@ -295,6 +301,12 @@ export function createFixtures(kit) {
       const tilt = (1 - c);
       fx.group.rotation.z = (hash01(fx.id, 31) - 0.5) * 0.24 * tilt;
       fx.group.rotation.x = (hash01(fx.id, 32) - 0.5) * 0.2 * tilt;
+      /* Broken fixtures: sparking dead lamp / taped lean on benches. */
+      if (c < 0.05 && fx.kind === 'lamp') {
+        fx.mats.forEach(m => {
+          if (m.lampBulb) m.mat.emissiveIntensity = 0.01 + Math.random() * 0.04;
+        });
+      }
     });
   }
 
