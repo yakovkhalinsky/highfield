@@ -7,6 +7,8 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+// Vendored three.min has no .d.ts; the build's tsc still typechecks tests.
+// @ts-expect-error — no types for the minified vendor module
 import * as THREE from "../page3d/shared/vendor/three.module.min.js";
 import { PAGE3D_VISUAL_FORK } from "../scripts/reference.ts";
 
@@ -27,23 +29,27 @@ const src = [
 ].join("\n");
 
 /** Evaluate scale consts (exported from world/scale.js) in dependency order. */
-function loadConsts(names: string[]): Record<string, number> {
+function loadConsts<const N extends string>(names: readonly N[]): { [K in N]: number } {
   const lines: string[] = [];
   for (const name of names) {
     const m = new RegExp(`^(?:export )?const ${name} = ([^;]+);`, "m").exec(scaleSrc);
     expect(m, `const ${name}`).toBeTruthy();
     lines.push(`const ${name} = ${m![1]};`);
   }
-  return new Function(`${lines.join("\n")}; return { ${names.join(", ")} };`)();
+  return new Function(`${lines.join("\n")}; return { ${names.join(", ")} };`)() as { [K in N]: number };
 }
 
-function loadPose(name: "POSE_STAND" | "POSE_SIT"): Record<string, number> {
+type Pose = {
+  hipY: number; torsoZ: number; legRx: number; kneeRx: number; armRx: number;
+};
+
+function loadPose(name: "POSE_STAND" | "POSE_SIT"): Pose {
   const m = new RegExp(`(?:export )?const ${name} = \\{([\\s\\S]*?)\\n\\};`).exec(figuresSrc);
   expect(m, name).toBeTruthy();
   const body = m![1]!
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .replace(/\/\/.*$/gm, "");
-  return new Function(`return { ${body} };`)();
+  return new Function(`return { ${body} };`)() as Pose;
 }
 
 function half(name: string): number {
