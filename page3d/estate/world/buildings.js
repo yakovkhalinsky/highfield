@@ -213,7 +213,9 @@ export function createBuildings(kit) {
     const g = new THREE.Group();
     scene.add(g);
 
-    const wallH = b.kind === 'shop' ? 1.9 : Math.max(1, b.floors) * FLOOR_H;
+    /* Shop is one storey in the plan; keep it on FLOOR_H like a single
+     * block floor so the door sits with the flat entrances. */
+    const wallH = Math.max(1, b.floors) * FLOOR_H;
     const cx = b.x + b.w / 2, cz = b.y + b.h / 2;
 
     const body = addBox(g, wallMat, b.w, wallH, b.h,
@@ -301,15 +303,16 @@ export function createBuildings(kit) {
         addBox(g, shopSignMat, 0.1, 0.36, 1.7,
                face.at + face.sign * 0.12, TILE_TOP + wallH - 0.34, along);
       }
-      const paneY = TILE_TOP + 1.22;
-      [along - 0.9, along, along + 0.9].forEach(px => {
+      /* Panes flank the door — never sit on the leaf itself. */
+      const paneY = TILE_TOP + wallH * 0.58;
+      [along - 1.15, along + 1.15].forEach(px => {
         if (face.axis === 'z') {
           addWindow(px, paneY, face.at + face.sign * 0.05,
-                    face.sign > 0 ? 0 : Math.PI, null, true, 1.45, 1.25);
+                    face.sign > 0 ? 0 : Math.PI, null, true, 1.2, 1.05);
         } else {
           addWindow(face.at + face.sign * 0.05, paneY, px,
                     face.sign > 0 ? Math.PI / 2 : -Math.PI / 2,
-                    null, true, 1.45, 1.25);
+                    null, true, 1.2, 1.05);
         }
       });
     }

@@ -6,7 +6,7 @@ import {
 } from './scale.js';
 import {
   POSE_STAND, POSE_SIT, SEAT_TOP, SIT_FORWARD, SIT_IN_MS, SIT_OUT_MS,
-  lerpPose, easeSmooth,
+  STRIDE_CELLS, lerpPose, easeSmooth, slerpYaw,
 } from './figures.js';
 
 export function createResidents(kit) {
@@ -186,13 +186,18 @@ export function createResidents(kit) {
     const thighRMesh = kit.thighRMesh;
     const shinLMesh = kit.shinLMesh;
     const shinRMesh = kit.shinRMesh;
+    const footLMesh = kit.footLMesh;
+    const footRMesh = kit.footRMesh;
     const armLMesh = kit.armLMesh;
     const armRMesh = kit.armRMesh;
+    const forearmLMesh = kit.forearmLMesh;
+    const forearmRMesh = kit.forearmRMesh;
     const headMesh = kit.headMesh;
     const hairMesh = kit.hairMesh;
     const shadowMesh = kit.shadowMesh;
     const figureMeshes = [torsoMesh, thighLMesh, thighRMesh, shinLMesh,
-                          shinRMesh, armLMesh, armRMesh, headMesh, hairMesh,
+                          shinRMesh, footLMesh, footRMesh, armLMesh, armRMesh,
+                          forearmLMesh, forearmRMesh, headMesh, hairMesh,
                           shadowMesh];
     figureMeshes.forEach(m => { m.count = people.length; });
     if (personAt.length < kit.capacity) {
@@ -228,7 +233,15 @@ export function createResidents(kit) {
       personAt[i] = p;
       toX[i] = p.x + 0.5;
       toZ[i] = p.y + 0.5;
-      roleScale[i] = p.role === 'child' ? 0.78 : p.role === 'elder' ? 0.92 : 1;
+      /* Height from age bands: young children, pupils, teens; elders a
+       * little shorter. Workers and adults stay at 1. */
+      if (p.role === 'elder') roleScale[i] = 0.92;
+      else if (p.role === 'child' || p.pupil) {
+        const age = Number(p.age);
+        if (Number.isFinite(age) && age < 10) roleScale[i] = 0.62;
+        else if (Number.isFinite(age) && age < 14) roleScale[i] = 0.72;
+        else roleScale[i] = 0.82;
+      } else roleScale[i] = 1;
       sitMode[i] = 0;
 
       const cloth = CLOTHING[Math.floor(hash01(p.id, 7) * CLOTHING.length) %
@@ -243,11 +256,15 @@ export function createResidents(kit) {
       torsoMesh.setColorAt(i, _c1);
       armLMesh.setColorAt(i, _c1);
       armRMesh.setColorAt(i, _c1);
+      forearmLMesh.setColorAt(i, _c1);
+      forearmRMesh.setColorAt(i, _c1);
       _c1.setHex(pants);
       thighLMesh.setColorAt(i, _c1);
       thighRMesh.setColorAt(i, _c1);
       shinLMesh.setColorAt(i, _c1);
       shinRMesh.setColorAt(i, _c1);
+      footLMesh.setColorAt(i, _c1);
+      footRMesh.setColorAt(i, _c1);
       _c1.setHex(skin);
       headMesh.setColorAt(i, _c1);
       _c1.setHex(hair);
@@ -273,27 +290,36 @@ export function createResidents(kit) {
       sitMode[i] = spots.sit[i];
       seatFx[i] = spots.fx[i];
       seatFz[i] = spots.fz[i];
-      /* Crowd places sitters on the cell/bench centre; the backrest sits on
-       * the back half of that cell, so slide the seat spot toward the path
-       * the bench faces — otherwise the torso goes through the board. */
-      if (sitMode[i] === 1) {
-        const fl = Math.hypot(seatFx[i], seatFz[i]) || 1;
-        toX[i] += (seatFx[i] / fl) * SIT_FORWARD;
-        toZ[i] += (seatFz[i] / fl) * SIT_FORWARD;
-      }
       const p = people[i];
+      /* Crowd still fills seats by rank; only the person who chose this
+       * bench keeps the sit pose — a follower stands clear. */
+      if (sitMode[i] === 1) {
+        const bench = kit.benchByCell[p.x + ',' + p.y];
+        if (!bench || Number(p.fixture) !== bench.id) {
+          sitMode[i] = 2;
+          kit.seatedCount = Math.max(0, kit.seatedCount - 1);
+        } else {
+          const fl = Math.hypot(seatFx[i], seatFz[i]) || 1;
+          toX[i] += (seatFx[i] / fl) * SIT_FORWARD;
+          toZ[i] += (seatFz[i] / fl) * SIT_FORWARD;
+        }
+      }
       if (!p.in) spotNow[p.id] = { cell: p.x + ',' + p.y, x: toX[i], z: toZ[i] };
     }
     prevSpot = spotNow;
     [torsoMesh, thighLMesh, thighRMesh, shinLMesh, shinRMesh,
-     armLMesh, armRMesh, headMesh, hairMesh]
+     footLMesh, footRMesh, armLMesh, armRMesh, forearmLMesh, forearmRMesh,
+     headMesh, hairMesh]
       .forEach(m => {
         if (m.instanceColor) m.instanceColor.needsUpdate = true;
       });
 
+    /* Lit windows mean someone is inside that flat, not merely assigned
+     * to it while outdoors or at work. Short-end panes have unit null. */
     occupied.clear();
     for (let i = 0; i < people.length; i++) {
-      if (people[i].unit != null) occupied.add(people[i].unit);
+      const p = people[i];
+      if (p.in && p.mode === 'in' && p.unit != null) occupied.add(p.unit);
     }
     kit.occupancyDirty = true;
 
@@ -499,8 +525,12 @@ export function createResidents(kit) {
     const thighRMesh = kit.thighRMesh;
     const shinLMesh = kit.shinLMesh;
     const shinRMesh = kit.shinRMesh;
+    const footLMesh = kit.footLMesh;
+    const footRMesh = kit.footRMesh;
     const armLMesh = kit.armLMesh;
     const armRMesh = kit.armRMesh;
+    const forearmLMesh = kit.forearmLMesh;
+    const forearmRMesh = kit.forearmRMesh;
     const headMesh = kit.headMesh;
     const hairMesh = kit.hairMesh;
     const shadowMesh = kit.shadowMesh;
@@ -520,15 +550,18 @@ export function createResidents(kit) {
       const r = routes[i];
       let x = toX[i], z = toZ[i];
       let moving = false;
+      let along = 0;
+      let wantYaw = facing[i];
       if (Walk && r && r.total > 1e-6) {
         const t = staticMode ? r.total
                              : (now - routeT0[i]) / (routeDur[i] || 1) * r.total;
+        along = Math.max(0, Math.min(r.total, t));
         Walk.sample(r, t, routeSample);
         x = routeSample.x;
         z = routeSample.z;
         moving = routeSample.moving;
         if (routeSample.dx || routeSample.dz) {
-          facing[i] = Math.atan2(routeSample.dx, routeSample.dz);
+          wantYaw = Math.atan2(routeSample.dx, routeSample.dz);
         }
       }
       x += crowdDx[i] || 0;
@@ -536,15 +569,17 @@ export function createResidents(kit) {
 
       /* facing: walk direction while moving; once still, a table or the
        * bench they share turns them (path-facing), else they keep the
-       * last walk heading */
+       * last walk heading. Yaw eases over ~200 ms so turns do not snap. */
       let atTable = false;
       if (!moving && Crowd) {
         const yaw = Crowd.faceTable(crowdFix, p.x, p.y, x, z);
-        if (yaw !== null) { facing[i] = yaw; atTable = true; }
+        if (yaw !== null) { wantYaw = yaw; atTable = true; }
         else if (sitMode[i] >= 1 && (seatFx[i] || seatFz[i])) {
-          facing[i] = Math.atan2(seatFx[i], seatFz[i]);
+          wantYaw = Math.atan2(seatFx[i], seatFz[i]);
         }
       }
+      facing[i] = staticMode ? wantYaw
+        : slerpYaw(facing[i], wantYaw, Math.min(1, dt / 0.2));
 
       /* sit blend: ease into the seat on arrival (starting in the last
        * stretch of the walk so they settle rather than pop); ease up as
@@ -572,7 +607,8 @@ export function createResidents(kit) {
       d.bob = 0; d.leanX = 0; d.sway = 0;
       d.torsoRx = 0; d.torsoRy = 0;
       d.legL = 0; d.legR = 0; d.kneeL = 0; d.kneeR = 0;
-      d.armL = 0; d.armR = 0;
+      d.armL = 0; d.armR = 0; d.elbowL = 0; d.elbowR = 0;
+      d.footL = 0; d.footR = 0;
       d.armOut = 0; d.armZ = 0;
       d.headYaw = 0; d.headPitch = 0;
       d.sit = sitT; d.shadowZ = 0; d.hipZ = 0;
@@ -583,7 +619,10 @@ export function createResidents(kit) {
       if (sitT > 0.5) d.hipZ = 0.08 * sitT;
 
       const child = p.role === 'child';
-      const phase = now * (moving ? 0.011 : 0.0016) + i * 1.7;
+      /* Distance-locked gait: stride phase from cells walked, not wall clock. */
+      const phase = moving
+        ? (along / STRIDE_CELLS) * Math.PI * 2 + i * 1.7
+        : now * 0.0016 + i * 1.7;
       const breathe = Math.sin(now * 0.0022 + i * 0.9) * 0.012;
 
       if (moving && sitT < 0.5) {
@@ -597,8 +636,12 @@ export function createResidents(kit) {
         /* swing leg (forward = negative hip) bends more at the knee */
         d.kneeL = (0.12 + Math.max(0, -stride) * 0.95) * gait;
         d.kneeR = (0.12 + Math.max(0, stride) * 0.95) * gait;
+        d.footL = Math.max(0, -stride) * 0.25 * gait;
+        d.footR = Math.max(0, stride) * 0.25 * gait;
         d.armL = -stride * 0.72 * gait;
         d.armR = stride * 0.72 * gait;
+        d.elbowL = (0.2 + Math.max(0, stride) * 0.35) * gait;
+        d.elbowR = (0.2 + Math.max(0, -stride) * 0.35) * gait;
         d.bob = (0.012 + Math.max(0, stride2) * 0.014) * s * gait;
         d.leanX = 0.10 * gait;
         d.sway = stride * 0.04 * gait;
@@ -622,6 +665,8 @@ export function createResidents(kit) {
         d.torsoRx = 0.10;
         d.armL = -0.55;
         d.armR = -0.55;
+        d.elbowL = 0.45;
+        d.elbowR = 0.45;
         d.armOut = -0.06;
         d.armZ = 0.08;
         d.headPitch = 0.12;
@@ -680,7 +725,8 @@ export function createResidents(kit) {
       drawFigure(i, x, z, rootY, facing[i], s, _pose, d);
     }
     [torsoMesh, thighLMesh, thighRMesh, shinLMesh, shinRMesh,
-     armLMesh, armRMesh, headMesh, hairMesh, shadowMesh]
+     footLMesh, footRMesh, armLMesh, armRMesh, forearmLMesh, forearmRMesh,
+     headMesh, hairMesh, shadowMesh]
       .forEach(m => { m.instanceMatrix.needsUpdate = true; });
   }
 

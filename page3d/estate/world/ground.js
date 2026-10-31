@@ -85,9 +85,11 @@ export function createGround(kit) {
     const season = Math.max(0, Math.min(3, (st && st.season) || 0));
     const pal = SEASONS[season];
     const shade = (st && st.shade) || null;
+    const frost = (st && st.weather) === 'frost';
     /* the apron is the same living ground, muted and hazed so it reads as
      * distance rather than as a second, flatter estate */
     _c1.setHex(pal.lawn).lerp(_haze, 0.38).multiplyScalar(0.84);
+    if (frost) _c1.lerp(new THREE.Color(0xe8eef2), 0.55);
     baseMat.color.copy(_c1);
     for (let y = 0; y < H; y++) {
       for (let x = 0; x < W; x++) {
@@ -103,6 +105,10 @@ export function createGround(kit) {
         if (shade) f -= Math.min(0.45, (shade[i] || 0) * 0.05);
         if (site === 'building') f = 1.08;
         _c1.setHex(hex).multiplyScalar(f);
+        /* Frost: the estate wakes white — whiten living ground, leave water. */
+        if (frost && site !== 'water' && site !== 'building' && site !== 'road') {
+          _c1.lerp(new THREE.Color(0xe8eef2), site === 'lawn' || site === 'play' ? 0.72 : 0.4);
+        }
         tiles.setColorAt(i, _c1);
       }
     }

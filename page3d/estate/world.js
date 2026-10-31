@@ -36,6 +36,7 @@ import { createResidents } from './world/residents.js';
 import { createFixtures } from './world/fixtures.js';
 import { createWeather } from './world/weather.js';
 import { createFocus } from './world/focus.js';
+import { phaseByName, phaseView } from './world/phase.js';
 
 /* The router is a classic script (`/3d/walk.js`) loaded before this module;
  * see walk.js beside it. If it ever fails to load, the page still draws
@@ -258,11 +259,25 @@ export function createWorld(ground, canvas, opts) {
 
   let groundKey = '';
   let lastNow = 0;
+  /* Live polls arrive as the night snapshot. Keep that as baseState; when
+   * the scrubber is off, the scene follows the clock phase so morning
+   * shows the yard and afternoon the courtyard. */
+  let baseState = null;
+  let scrubIndex = -1;
+  let livePhaseName = '';
 
-  function setState(st) {
-    clock.haveState = true;
+  function drawState(now) {
+    if (!baseState) return null;
+    if (scrubIndex >= 0) return phaseView(baseState, scrubIndex);
+    const name = Clock.phaseAt(Clock.fraction(clock, now || performance.now())).name;
+    livePhaseName = name;
+    return phaseByName(baseState, name);
+  }
+
+  function paintState(st) {
+    if (!st) return;
     kit.weather = st.weather || 'clear';
-    const key = st.day + ':' + st.season;
+    const key = st.day + ':' + st.season + ':' + (st.weather || '');
     if (key !== groundKey) {
       groundKey = key;
       paintGround(st);
@@ -278,6 +293,15 @@ export function createWorld(ground, canvas, opts) {
     paintWindows(kit.windowDark);
     kit.occupancyDirty = false;
     lastNow = performance.now();
+  }
+
+  function setState(st) {
+    clock.haveState = true;
+    /* Scrubber overlays arrive with viewPhase; keep the last unframed poll
+     * so returning to live can still follow the clock. */
+    if (!st.viewPhase) baseState = st;
+    else if (!baseState) baseState = st;
+    paintState(drawState(performance.now()) || st);
   }
 
   /* -------------------------------------------------------------- frame */
@@ -299,6 +323,12 @@ export function createWorld(ground, canvas, opts) {
                                       : 0.016);
     lastNow = now;
     const f = dayFraction(now);
+    const info = Clock.phaseAt(f);
+    /* When live, restage people as the clock crosses a phase boundary so
+     * the yard and the courtyard match the light without the scrubber. */
+    if (baseState && scrubIndex < 0 && info.name !== livePhaseName) {
+      paintState(drawState(now));
+    }
     updateSky(f);
     const dark = kit.darkNow;
     /* repaint the windows when the darkness has moved a step, or when who
@@ -315,7 +345,10 @@ export function createWorld(ground, canvas, opts) {
     pantsMat.emissiveIntensity = 0.06 + dark * 0.32;
     headMat.emissiveIntensity = 0.05 + dark * 0.30;
     hairMat.emissiveIntensity = 0.04 + dark * 0.22;
+    /* Street-lamp bulbs follow each fixture's condition; door bulbs use
+     * the shared material and only track darkness. */
     lampBulbMat.emissiveIntensity = 0.05 + dark * 2.6;
+    if (typeof kit.tuneLampBulbs === 'function') kit.tuneLampBulbs(dark);
     shopSignMat.emissiveIntensity = 0.1 + dark * 1.8;
     glowMat.opacity = dark * 1.1;
     glow.visible = kit.glowCount > 0 && dark > 0.02;
@@ -324,9 +357,6 @@ export function createWorld(ground, canvas, opts) {
     updateWeather(dt, now);
     controls.update();
     renderer.render(scene, camera);
-    /* the five names are equal fifths of the same clock the light reads;
-     * Clock.phaseAt is where that fact lives. */
-    const info = Clock.phaseAt(f);
     phaseInfo.phase = info.phase;
     phaseInfo.index = info.index;
     phaseInfo.name = info.name;
@@ -371,7 +401,9 @@ export function createWorld(ground, canvas, opts) {
    * light follows it unless the page pinned an hour of its own; the
    * frame itself is the caller's (hud.js `phaseView`). */
   function setPhaseView(i) {
+    scrubIndex = i;
     clock.forcedPhase = i >= 0 ? i : forcedPhase;
+    if (baseState) paintState(drawState(performance.now()));
   }
 
   return {

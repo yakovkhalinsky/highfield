@@ -148,10 +148,13 @@ export function createFixtures(kit) {
       g.add(pole);
       const arm = addBox(g, metal.mat, 0.32, 0.045, 0.045, 0.13, lampH - 0.02, 0);
       arm.castShadow = false;
-      const bulb = new THREE.Mesh(sphereGeo, lampBulbMat);
+      /* Own material so a dead lamp's bulb can dim with condition. */
+      const bulbMat = lampBulbMat.clone();
+      const bulb = new THREE.Mesh(sphereGeo, bulbMat);
       bulb.scale.setScalar(0.12);
       bulb.position.set(0.28, lampH - 0.08, 0);
       g.add(bulb);
+      mats.push({ mat: bulbMat, base: 0xfff0c8, lampBulb: true });
     } else if (f.kind === 'playground') {
       const red = fixtureMaterial(0xd8574f, 0.8);
       const yellow = fixtureMaterial(0xe6b84f, 0.8);
@@ -282,8 +285,10 @@ export function createFixtures(kit) {
     fixtureEntries.forEach(fx => {
       const f = fixtureById[fx.id];
       const c = f ? clamp01(f.c == null ? 1 : f.c) : 1;
+      fx.condition = c;
       const k = 0.55 + 0.45 * c;
       fx.mats.forEach(m => {
+        if (m.lampBulb) return;
         _c1.setHex(m.base).multiplyScalar(k);
         m.mat.color.copy(_c1);
       });
@@ -293,10 +298,24 @@ export function createFixtures(kit) {
     });
   }
 
+  /* Street-lamp bulbs track fixture condition × night darkness. */
+  function tuneLampBulbs(dark) {
+    const d = clamp01(dark);
+    fixtureEntries.forEach(fx => {
+      if (fx.kind !== 'lamp') return;
+      const c = fx.condition == null ? 1 : fx.condition;
+      fx.mats.forEach(m => {
+        if (!m.lampBulb) return;
+        m.mat.emissiveIntensity = c > 0.02 ? (0.05 + d * 2.6) * c : 0.02;
+      });
+    });
+  }
+
   kit.fixtureGroup = fixtureGroup;
   kit.benchByCell = benchByCell;
   kit.benchCount = benchCount;
   kit.fixturesBuilt = fixturesBuilt;
   kit.fixtureById = fixtureById;
+  kit.tuneLampBulbs = tuneLampBulbs;
   return { buildFixtures, syncFixtures };
 }

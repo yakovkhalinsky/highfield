@@ -55,7 +55,8 @@ export function createWeather(kit) {
   function syncWeather(st) {
     const weather = st.weather || 'clear';
     rainAmount = weather === 'rain' ? 800 : weather === 'storm' ? RAIN_MAX : 0;
-    snowAmount = weather === 'frost' ? SNOW_MAX : 0;
+    /* Frost is mainly white ground; a light flake accent, not a blizzard. */
+    snowAmount = weather === 'frost' ? Math.min(180, SNOW_MAX) : 0;
     rainGeo.setDrawRange(0, rainAmount * 2);
     snowGeo.setDrawRange(0, snowAmount);
     rain.visible = rainAmount > 0;
