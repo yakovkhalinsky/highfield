@@ -21,6 +21,7 @@ export interface Need {
 export interface FixtureSpec {
   affords: Record<string, number>; capacity?: number; hard_capacity?: boolean;
   decay: number; loud?: number; carry?: number; light?: number;
+  noise_dampen?: number; dampen_carry?: number; phases?: string[];
   perimeter_bonus?: Record<string, number>; upkeep?: number; break_prob?: number;
   stock?: number; supplied?: boolean; storm_fall?: number; living?: boolean; glyph: string;
 }
@@ -82,7 +83,7 @@ export interface Rules {
     holidays?: Pair[];
   };
   work: {
-    share: number; local_share?: number; commute: string; shift: string[];
+    share: number; local_share?: number; days?: number[]; commute: string; shift: string[];
     school_hours: string[]; meets: Record<string, number>;
   };
   pacing: {

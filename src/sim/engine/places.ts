@@ -56,6 +56,24 @@ export function buildNoise(w: W.World): W.Cell[][] {
       }
     }
   }
+  /* Living trees dampen nearby noise (playground / road bleed). */
+  for (const f of Object.values(w.fixtures)) {
+    if (f.condition <= 0) continue;
+    const spec = R.fixtures[f.kind]!;
+    const damp = spec.noise_dampen ?? 0;
+    if (!damp) continue;
+    const carry = spec.dampen_carry ?? 3;
+    for (let dy = -carry; dy <= carry; dy++) {
+      for (let dx = -carry; dx <= carry; dx++) {
+        const d = Math.abs(dx) + Math.abs(dy);
+        if (d > carry) continue;
+        const x = f.x + dx, y = f.y + dy;
+        if (W.inBounds(w, x, y)) {
+          grid[y]![x]! = Math.max(0, grid[y]![x]! - damp * (1.0 - d / (carry + 1.0)));
+        }
+      }
+    }
+  }
   for (let y = 0; y < hh; y++) {
     for (let x = 0; x < ww; x++) {
       w.cells[y]![x]!.noise = Math.max(0.0, (grid[y]![x]! - soft) * W.fateMult(w, "noise_mult", x, y));

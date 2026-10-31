@@ -14,7 +14,7 @@ export function tick(w: W.World): Ev[] {
   const evs: Ev[] = [];
   w.day += 1;
   const t = w.day;
-  w.daybook = { uses: {}, out: 0, noise: 0.0, broke: 0, sold_out: false };
+  w.daybook = { uses: {}, out: 0, noise: 0.0, broke: 0, sold_out: false, worked: 0 };
   const prev = W.seasonIndex(t - 1), now = W.seasonIndex(t);
   if (now !== prev) evs.push({ day: t, kind: "turn", season: now });
   effects.age(w);
@@ -23,6 +23,8 @@ export function tick(w: W.World): Ev[] {
   updateWetStreak(w);
   updatePuddles(w);
   w.daybook.weather = w.weather;
+  w.daybook.wet_streak = w.wet_days;
+  w.daybook.power_off = Object.values(w.buildings).some((b) => b.power === false);
   updateTrees(w, evs);
   places.buildNoise(w);
   places.buildLight(w);

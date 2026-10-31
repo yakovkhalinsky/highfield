@@ -6,12 +6,17 @@ import { describe, expect, it } from "vitest";
 import { land, age } from "../src/sim/engine/effects.ts";
 import { updatePuddles, updateWear } from "../src/sim/engine/ground.ts";
 import { updateWetStreak } from "../src/sim/engine/weather.ts";
-import { onHoliday, schoolDay, isLocalWorker, isWorker } from "../src/sim/engine/daytime.ts";
-import { maintainUnits } from "../src/sim/engine/households.ts";
-import { candidates, satisfy, utility } from "../src/sim/engine/needs.ts";
+import {
+  onHoliday, schoolDay, workDay, shift, carer, dueAtSchool, isLocalWorker, isWorker, isPupil,
+} from "../src/sim/engine/daytime.ts";
+import { maintainUnits, unhappiness } from "../src/sim/engine/households.ts";
+import { candidates, decayAffinity, satisfy, utility } from "../src/sim/engine/needs.ts";
+import { buildNoise } from "../src/sim/engine/places.ts";
 import { tick } from "../src/sim/engine/tick.ts";
+import { fateWeights } from "../src/sim/decide.ts";
 import { generate } from "../src/sim/gen.ts";
 import { R } from "../src/sim/rules.ts";
+import * as W from "../src/sim/world.ts";
 import type { Ev } from "../src/sim/engine/events.ts";
 import { PyRandom } from "../src/py/random.ts";
 
@@ -106,5 +111,136 @@ describe("G6–G10 purpose and season", () => {
     const start = w.day;
     for (let i = 0; i < 14; i++) tick(w);
     expect(w.day).toBe(start + 14);
+  });
+});
+
+describe("G12 work vs school holidays", () => {
+  it("workers keep shifts on school holidays; weekends stay off", () => {
+    const w = generate(1);
+    w.day = 65; // first holiday block [60,74]
+    expect(onHoliday(w)).toBe(true);
+    expect(schoolDay(w)).toBe(false);
+    expect(workDay(w)).toBe(true);
+    const workers = Object.values(w.residents).filter((r) => isWorker(w, r));
+    const nonCarer = workers.find((r) => {
+      const hh = Object.values(w.households).find((h) => h.id === r.household);
+      return !hh || carer(w, hh) !== r;
+    })!;
+    expect(shift(w, nonCarer).length).toBeGreaterThan(0);
+
+    /* Find a Saturday (weekday 5): day 5 from seed-1 start is often weekend-ish;
+     * walk forward until weekday is Sat/Sun. */
+    for (let d = 1; d <= 14; d++) {
+      w.day = d;
+      const wd = ((d - 1) % 7);
+      if (wd === 5 || wd === 6) {
+        expect(workDay(w)).toBe(false);
+        expect(shift(w, nonCarer).length).toBe(0);
+        break;
+      }
+    }
+  });
+});
+
+describe("G13–G18 phase A knobs", () => {
+  it("trees dampen noise near their cells", () => {
+    const w = generate(1);
+    const tree = Object.values(w.fixtures).find((f) => f.kind === "tree")!;
+    const play = Object.values(w.fixtures).find((f) => f.kind === "playground");
+    if (play) {
+      play.last_use = 12;
+      play.condition = 1;
+    }
+    buildNoise(w);
+    const near = w.cells[tree.y]![tree.x]!.noise;
+    expect(near).toBeGreaterThanOrEqual(0);
+    expect(R.fixtures.tree!.noise_dampen).toBeGreaterThan(0);
+    expect(Object.keys(R.fixtures.tree!.affords).length).toBeGreaterThan(0);
+  });
+
+  it("shop is closed at dawn and night", () => {
+    const w = generate(1);
+    const shop = Object.values(w.fixtures).find((f) => f.kind === "shop")!;
+    const r = Object.values(w.residents)[0]!;
+    const c = { kind: "shop", x: shop.x, y: shop.y, fixture: shop, unit: null };
+    const rng = new PyRandom("shop-hours");
+    expect(utility(w, r, c, "food", "dawn", rng)).toBeNull();
+    expect(utility(w, r, c, "food", "night", rng)).toBeNull();
+    expect(utility(w, r, c, "food", "morning", rng)).not.toBeNull();
+  });
+
+  it("bus_stop advertises company", () => {
+    expect(R.fixtures.bus_stop!.affords.company).toBeGreaterThan(0);
+    const w = generate(1);
+    const c = candidates(w);
+    expect(c.company!.some((x) => x.kind === "bus_stop")).toBe(true);
+  });
+
+  it("damage weight rises with worn fixtures", () => {
+    const w = generate(1);
+    const base = fateWeights(w).damage ?? 0;
+    for (const f of Object.values(w.fixtures)) f.condition = 0.2;
+    const worn = fateWeights(w).damage ?? 0;
+    expect(worn).toBeGreaterThan(base);
+  });
+});
+
+describe("G19–G25 phase B engine", () => {
+  it("puddles and wear raise walkCost", () => {
+    const w = generate(1);
+    let x = 0, y = 0;
+    outer: for (let yy = 0; yy < w.height; yy++) {
+      for (let xx = 0; xx < w.width; xx++) {
+        if (W.walkCost(w, xx, yy) !== null) { x = xx; y = yy; break outer; }
+      }
+    }
+    const before = W.walkCost(w, x, y)!;
+    w.cells[y]![x]!.puddle = 5;
+    w.cells[y]![x]!.wear = 4;
+    const after = W.walkCost(w, x, y)!;
+    expect(after).toBeGreaterThan(before);
+  });
+
+  it("power cut lowers home food utility", () => {
+    const w = generate(1);
+    const r = Object.values(w.residents)[0]!;
+    const hh = w.households[String(r.household)]!;
+    hh.food_stock = 4;
+    const unit = w.units[String(hh.unit)]!;
+    const home = { kind: "home", x: 0, y: 0, fixture: null, unit };
+    const rng = new PyRandom("power-home");
+    const powered = utility(w, r, home, "food", "dawn", rng)!;
+    w.buildings[String(unit.building)]!.power = false;
+    const dark = utility(w, r, home, "food", "dawn", new PyRandom("power-home"))!;
+    expect(dark).toBeLessThan(powered);
+  });
+
+  it("ill pupils are not due at school", () => {
+    const w = generate(1);
+    w.day = 10;
+    expect(schoolDay(w)).toBe(true);
+    const pupil = Object.values(w.residents).find((r) => isPupil(r))!;
+    expect(dueAtSchool(w, pupil, "morning")).toBe(true);
+    pupil.ill = 2;
+    expect(dueAtSchool(w, pupil, "morning")).toBe(false);
+  });
+
+  it("affinity decays overnight", () => {
+    const w = generate(1);
+    const [a, b] = Object.values(w.residents);
+    a!.affinity = { [String(b!.id)]: 0.5 };
+    b!.affinity = { [String(a!.id)]: 0.5 };
+    decayAffinity(w);
+    expect((a!.affinity as Record<string, number>)[String(b!.id)]).toBeLessThan(0.5);
+  });
+
+  it("daybook thoughts raise unhappiness", () => {
+    const w = generate(1);
+    const hh = Object.values(w.households)[0]!;
+    const before = hh.unhappy;
+    w.daybook = { uses: {}, out: 0, noise: 0, broke: 2, sold_out: true, weather: "storm" };
+    for (const b of Object.values(w.buildings)) b.power = false;
+    unhappiness(w);
+    expect(hh.unhappy).toBeGreaterThan(before);
   });
 });

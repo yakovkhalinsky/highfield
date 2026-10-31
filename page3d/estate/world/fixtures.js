@@ -299,12 +299,21 @@ export function createFixtures(kit) {
         m.mat.color.copy(_c1);
       });
       const tilt = (1 - c);
-      fx.group.rotation.z = (hash01(fx.id, 31) - 0.5) * 0.24 * tilt;
-      fx.group.rotation.x = (hash01(fx.id, 32) - 0.5) * 0.2 * tilt;
+      /* Broken / worn fixtures lean harder so decay reads at a glance (G27). */
+      const lean = c < 0.15 ? 1.6 : 1.0;
+      fx.group.rotation.z = (hash01(fx.id, 31) - 0.5) * 0.28 * tilt * lean;
+      fx.group.rotation.x = (hash01(fx.id, 32) - 0.5) * 0.24 * tilt * lean;
       /* Broken fixtures: sparking dead lamp / taped lean on benches. */
       if (c < 0.05 && fx.kind === 'lamp') {
         fx.mats.forEach(m => {
           if (m.lampBulb) m.mat.emissiveIntensity = 0.01 + Math.random() * 0.04;
+        });
+      }
+      if (c < 0.15) {
+        fx.mats.forEach(m => {
+          if (m.lampBulb) return;
+          _c1.setHex(m.base).multiplyScalar(0.35 + 0.3 * c);
+          m.mat.color.copy(_c1);
         });
       }
     });

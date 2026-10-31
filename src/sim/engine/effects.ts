@@ -77,7 +77,16 @@ function damage(w: W.World, f: W.Fate, amount: number, rng: PyRandom): W.Fixture
     (fx) => fx.condition > 0 && W.inRegion(w, region, fx.x, fx.y),
   );
   if (!here.length) return null;
-  const fx = here[rng.randrange(here.length)]!;
+  /* Prefer already-worn fixtures so the watcher answers visible decay. */
+  const weights = here.map((fx) => 0.25 + (1.0 - fx.condition));
+  let total = 0;
+  for (const wt of weights) total += wt;
+  let roll = rng.random() * total;
+  let fx = here[here.length - 1]!;
+  for (let i = 0; i < here.length; i++) {
+    roll -= weights[i]!;
+    if (roll <= 0) { fx = here[i]!; break; }
+  }
   fx.condition = Math.max(0.0, fx.condition - amount);
   return fx;
 }

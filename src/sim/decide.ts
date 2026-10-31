@@ -104,6 +104,20 @@ export function fateWeights(w: W.World): Record<string, number> {
       wt = base * (SEASON_FIT[spec.weather]?.[season] ?? 1.0);
     } else if (spec.walk_mult || spec.stair_mult || spec.damage) {
       wt = 0.35 * calm;
+      if (spec.damage) {
+        let wearSum = 0, wearN = 0;
+        for (const fx of Object.values(w.fixtures)) {
+          if (fx.condition <= 0) continue;
+          wearSum += 1.0 - fx.condition;
+          wearN += 1;
+        }
+        for (const row of w.cells) for (const c of row) {
+          const wear = c.wear ?? 0;
+          if (wear > 0) { wearSum += Math.min(1, wear); wearN += 1; }
+        }
+        const meanWear = wearN ? wearSum / wearN : 0;
+        wt += 1.8 * meanWear;
+      }
     } else {
       wt = 0.5;
     }

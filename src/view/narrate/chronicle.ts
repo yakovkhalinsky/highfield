@@ -171,6 +171,13 @@ function news(w: W.World, evs: Ev[]): Beat[] {
       ? [["frost:0", "ice on the pond"], ["frost:1", "the pond iced over"]]
       : [["frost:2", "a hard frost"], ["frost:3", "the estate woke white"]] });
   }
+  const darkCuts = by("fate").filter((e) => e.what === "power_cut").length;
+  if (darkCuts) {
+    out.push({ weight: 5, options: [
+      ["dark:0", darkCuts === 1 ? "the flats went dark for a spell" : "dark flats again this stretch"],
+      ["dark:1", "lamps dimmed and stairwells stayed cold"],
+    ] });
+  }
   return out;
 }
 
@@ -211,6 +218,32 @@ function shape(w: W.World, s: Stretch): Beat | null {
     opts.push(["shape:2", `${sky}, and ${place} the place to be`]);
   }
   if (n > 1) opts.push(["shape:3", `${sky}; about ${commas(Math.round(total / n))} errands a day`]);
+  /* Wet-week memory when rain/storm dominates the stretch (G26). */
+  if (wet >= 2) {
+    opts.push(["wet:0", `a wet week — rain on ${count(wet)} of ${count(n)} days`]);
+    opts.push(["wet:1", `puddles stayed; ${count(wet)} wet ${dayz(wet)} in a row of ${count(n)}`]);
+  }
+  /* Table/bench regulars from sustained co-use (G26). */
+  const social = (uses.table ?? 0) + (uses.bench ?? 0);
+  if (social >= n * 2) {
+    opts.push(["reg:0", "the same faces kept the tables and benches"]);
+    opts.push(["reg:1", "regulars at the courtyard seats"]);
+  }
+  /* Holiday stretch where adults still went to work (G26). */
+  const worked = days.reduce((p, d) => p + (s.books[d]!.worked ?? 0), 0);
+  if (worked > 0 && wet < n) {
+    /* Soft signal: if many workdays logged, mention commuting life. */
+    if (worked >= n) {
+      opts.push(["work:0", "adults still left for work while the yard stayed quiet"]);
+      opts.push(["work:1", "the morning bus stop filled even on school holidays"]);
+    }
+  }
+  const darkDays = days.filter((d) => s.books[d]?.power_off).length;
+  if (darkDays) {
+    opts.push(["darkflat:0", darkDays === 1
+      ? "one dark evening in the flats"
+      : `${count(darkDays)} dark ${dayz(darkDays)} in the flats`]);
+  }
   return { weight: 1, options: opts };
 }
 

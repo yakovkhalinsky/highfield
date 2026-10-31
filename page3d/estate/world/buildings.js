@@ -434,12 +434,14 @@ export function createBuildings(kit) {
       const s = windowSlots[i];
       let key = s.unit != null && occupied.has(s.unit) ? 'lived'
               : s.shop ? 'shop' : 'pane';
-      /* Power cuts kill warm window light for that block. */
+      /* Power cuts kill warm window light for that block (G27: deeper blackout). */
+      let cut = false;
       if (key === 'lived' && s.unit != null) {
         const ub = unitBuilding[String(s.unit)];
-        if (ub && powerByBuilding[ub.b] === false) key = 'pane';
+        if (ub && powerByBuilding[ub.b] === false) { key = 'pane'; cut = true; }
       }
       _c1.lerpColors(WIN_DAY[key], WIN_NIGHT[key], windowDark);
+      if (cut) _c1.multiplyScalar(0.35);
       windowMesh.setColorAt(i, _c1);
     }
     if (windowMesh.instanceColor) windowMesh.instanceColor.needsUpdate = true;

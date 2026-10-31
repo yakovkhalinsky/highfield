@@ -116,12 +116,12 @@ export function createGround(kit) {
         if (heat && site !== 'water' && site !== 'building') {
           _c1.lerp(new THREE.Color(0xe0c080), 0.18);
         }
-        /* Wear darkens paths; puddles cool and darken paving. */
-        if (wear && (site === 'path' || site === 'road')) {
-          _c1.multiplyScalar(1 - Math.min(0.35, (wear[i] || 0) * 0.04));
+        /* Wear darkens paths; puddles cool and darken paving (G27 clarity). */
+        if (wear && (site === 'path' || site === 'road' || site === 'lawn')) {
+          _c1.multiplyScalar(1 - Math.min(0.45, (wear[i] || 0) * 0.055));
         }
         if (puddle && (puddle[i] || 0) > 0 && site !== 'water' && site !== 'building') {
-          _c1.lerp(new THREE.Color(0x4a6a7a), Math.min(0.55, (puddle[i] || 0) * 0.07));
+          _c1.lerp(new THREE.Color(0x3a5a6e), Math.min(0.7, (puddle[i] || 0) * 0.1));
         }
         tiles.setColorAt(i, _c1);
       }

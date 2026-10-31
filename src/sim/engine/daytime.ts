@@ -110,6 +110,12 @@ export function schoolDay(w: W.World): boolean {
   return law().days.includes(W.weekday(w.day)) && !onHoliday(w);
 }
 
+/** Weekday work: Mon–Fri by default; not gated on school holidays. */
+export function workDay(w: W.World): boolean {
+  const days = jobs().days ?? law().days;
+  return days.includes(W.weekday(w.day));
+}
+
 export function isPupil(r: Res): boolean {
   const [lo, hi] = law().ages;
   return lo <= r.age && r.age < hi;
@@ -155,12 +161,15 @@ export function carer(w: W.World, hh: W.Household): Res | null {
 }
 
 export function shift(w: W.World, r: Res): readonly string[] {
-  if (!schoolDay(w) || !isWorker(w, r)) return [];
+  if (!workDay(w) || !isWorker(w, r)) return [];
   const hh = F.household(w, r);
   if (hh !== null && carer(w, hh) === r) {
     const young = F.youngIn(w, hh);
     if (young.some((k) => !isPupil(k))) return [];
-    return jobs().school_hours;
+    /* Stay home when a pupil is ill (G21). */
+    if (young.some((k) => ((k.ill as number | undefined) ?? 0) > 0 && isPupil(k))) return [];
+    /* School-hours only while school is in; holidays run a full adult shift. */
+    if (schoolDay(w)) return jobs().school_hours;
   }
   return jobs().shift;
 }
@@ -176,6 +185,7 @@ export function commuting(w: W.World, r: Res, phase: string): boolean {
 
 export function dueAtSchool(w: W.World, r: Res, phase: string): boolean {
   if (!schoolDay(w) || !isPupil(r)) return false;
+  if (((r.ill as number | undefined) ?? 0) > 0) return false;
   if (r.where.mode === SCHOOL || r.schooled === w.day) return false;
   return phase === law().run || law().hours.includes(phase);
 }
@@ -308,7 +318,12 @@ export function arrive(w: W.World, party: Res[], c: Cand, phase: string, fetch: 
     };
     lead.side = null;
     meet(w, lead, jobs().meets);
-    if (c.fixture) tally(c.fixture);
+    if (c.fixture) {
+      tally(c.fixture);
+      /* Local workers repair their post; shop stock stays delivery-only (G25). */
+      c.fixture.condition = Math.min(1.0, c.fixture.condition + (R.engine.local_repair ?? 0.12));
+    }
+    if (w.daybook) w.daybook.worked = (w.daybook.worked ?? 0) + 1;
     return [...party];
   }
   if (c.duty === "commute") {
@@ -316,6 +331,7 @@ export function arrive(w: W.World, party: Res[], c: Cand, phase: string, fetch: 
     lead.where = { mode: AWAY, unit: homeUnit(w, lead), x, y, fixture: null };
     lead.side = null;
     tally(c.fixture!);
+    if (w.daybook) w.daybook.worked = (w.daybook.worked ?? 0) + 1;
     return [...party];
   }
   if (c.duty === "pickup") {

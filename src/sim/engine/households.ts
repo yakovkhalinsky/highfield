@@ -127,11 +127,20 @@ export function births(w: W.World, evs: Ev[]): void {
 export function unhappiness(w: W.World): void {
   const rise = R.pop.unhappy_rise ?? 0.5;
   const decay = R.pop.unhappy_decay ?? 0.97;
+  const book = w.daybook;
+  let thoughts = 0;
+  if (book) {
+    if (book.sold_out) thoughts += R.engine.thought_sold_out ?? 0.12;
+    if (book.weather === "storm") thoughts += R.engine.thought_storm ?? 0.1;
+    if (book.broke > 0) thoughts += (R.engine.thought_broke ?? 0.08) * Math.min(3, book.broke);
+  }
+  const dark = Object.values(w.buildings).some((b) => b.power === false);
+  if (dark) thoughts += R.engine.thought_power ?? 0.14;
   for (const hh of Object.values(w.households)) {
     const folk = membersOf(w, hh);
     if (!folk.length) continue;
     const frayed = folk.filter((r) => r.stress >= 1.0).length / folk.length;
-    hh.unhappy = hh.unhappy * decay + frayed * rise;
+    hh.unhappy = hh.unhappy * decay + frayed * rise + thoughts;
   }
 }
 
@@ -210,6 +219,7 @@ export function arrivals(w: W.World): { kind: string } | undefined {
 export function maintainUnits(w: W.World): void {
   const wear = R.engine.unit_wear ?? 0.0008;
   const repair = R.engine.unit_repair ?? 0.02;
+  const playDrift = R.engine.play_quiet_drift ?? 0.003;
   for (const u of Object.values(w.units)) {
     if (u.household === null) {
       u.condition = Math.min(1.0, u.condition + repair * 0.25);
@@ -217,7 +227,10 @@ export function maintainUnits(w: W.World): void {
     }
     const noise = Math.max(0, 1.0 - u.quiet_base);
     u.condition = Math.max(0.35, u.condition - wear * (1.0 + noise));
-    u.quiet_base = Math.max(0.2, Math.min(0.95, u.quiet_base - wear * 0.5 * noise + repair * 0.01 * (1.0 - u.condition)));
+    const b = w.buildings[String(u.building)];
+    const doorNoise = b ? (w.cells[b.door[1]]![b.door[0]]!.noise ?? 0) : 0;
+    u.quiet_base = Math.max(0.2, Math.min(0.95,
+      u.quiet_base - wear * 0.5 * noise - playDrift * doorNoise + repair * 0.01 * (1.0 - u.condition)));
   }
 }
 

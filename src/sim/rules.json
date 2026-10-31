@@ -141,8 +141,8 @@
    },
    "capacity": 12,
    "decay": 0.0004,
-   "loud": 0.11,
-   "carry": 12,
+   "loud": 0.16,
+   "carry": 14,
    "upkeep": 1.6,
    "break_prob": 0.0028,
    "glyph": "🛝"
@@ -171,6 +171,11 @@
    "supplied": true,
    "loud": 0.035,
    "carry": 5,
+   "phases": [
+    "morning",
+    "afternoon",
+    "evening"
+   ],
    "upkeep": 3.0,
    "break_prob": 0.0005,
    "glyph": "🏪"
@@ -185,9 +190,15 @@
    "glyph": "💡"
   },
   "tree": {
-   "affords": {},
+   "affords": {
+    "quiet": 0.2,
+    "company": 0.15
+   },
+   "capacity": 4,
    "decay": 6e-05,
    "storm_fall": 0.02,
+   "noise_dampen": 0.06,
+   "dampen_carry": 3,
    "glyph": "🌳",
    "living": true
   },
@@ -200,8 +211,10 @@
    "glyph": "🏫"
   },
   "bus_stop": {
-   "affords": {},
-   "capacity": 0,
+   "affords": {
+    "company": 0.35
+   },
+   "capacity": 6,
    "decay": 0.00015,
    "upkeep": 1.0,
    "break_prob": 0.0012,
@@ -612,7 +625,19 @@
   "ill_mobility": 0.55,
   "ill_prob": 0.08,
   "affinity_gain": 0.15,
-  "affinity_company": 0.35
+  "affinity_company": 0.35,
+  "affinity_decay": 0.02,
+  "affinity_crowd": 0.08,
+  "play_quiet_drift": 0.003,
+  "puddle_walk": 0.35,
+  "wear_walk": 0.25,
+  "power_home_pen": 0.45,
+  "variety_pen": 0.18,
+  "thought_sold_out": 0.12,
+  "thought_storm": 0.1,
+  "thought_power": 0.14,
+  "thought_broke": 0.08,
+  "local_repair": 0.12
  },
  "families": {
   "young_under": 10,
@@ -620,7 +645,8 @@
   "near": 1,
   "older_places": [
    "playground",
-   "shop"
+   "shop",
+   "tree"
   ],
   "older_range": 14,
   "older_daytime": [
@@ -665,6 +691,13 @@
  "work": {
   "share": 0.6,
   "local_share": 0.25,
+  "days": [
+   0,
+   1,
+   2,
+   3,
+   4
+  ],
   "commute": "dawn",
   "shift": [
    "morning",

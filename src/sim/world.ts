@@ -52,7 +52,8 @@ export interface Fate { kind?: string; region?: string; [k: string]: unknown }
 
 export interface Daybook {
   uses: Record<string, number>; out: number; noise: number; broke: number;
-  sold_out?: boolean; weather?: string;
+  sold_out?: boolean; weather?: string; power_off?: boolean; worked?: number;
+  wet_streak?: number;
 }
 
 export interface World {
@@ -195,7 +196,9 @@ export function walkCost(w: World, x: number, y: number): number | null {
   if (c === null) return null;
   const base = R.sites[c.site]!.walk;
   if (base === null) return null;
-  return base * fateMult(w, "walk_mult", x, y);
+  const puddle = (c.puddle ?? 0) * (R.engine.puddle_walk ?? 0.35);
+  const wear = (c.wear ?? 0) * (R.engine.wear_walk ?? 0.25);
+  return base * (1.0 + puddle + wear) * fateMult(w, "walk_mult", x, y);
 }
 export function stairMult(w: World, b: Building): number {
   return fateMult(w, "stair_mult", b.door[0], b.door[1]);

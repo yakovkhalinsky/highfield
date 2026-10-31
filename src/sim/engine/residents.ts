@@ -12,8 +12,8 @@ import * as D from "./daytime.ts";
 import * as F from "./families.ts";
 import type { Ev } from "./events.ts";
 import {
-  HOOKS, candidates, drain, fray, live, phaseMult, pressure, rankedNeeds, satisfy, seatHolders,
-  topPress, weekMult,
+  HOOKS, candidates, decayAffinity, drain, fray, live, phaseMult, pressure, rankedNeeds, satisfy,
+  seatHolders, topPress, weekMult,
 } from "./needs.ts";
 
 export const PHASES = ["dawn", "morning", "afternoon", "evening", "night"] as const;
@@ -62,6 +62,7 @@ export function updateResidents(w: W.World, evs: Ev[]): void {
   const cand = candidates(w);
   const line = R.engine.stress_at!;
   D.overnight(w);
+  decayAffinity(w);
   updateIllness(w, evs);
   F.settle(w, evs);
   for (const phase of PHASES) {
