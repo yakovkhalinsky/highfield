@@ -290,8 +290,9 @@ export function createWorld(ground, canvas, opts) {
     if (!kit.fixturesBuilt) buildFixtures(st);
     syncFixtures(st);
     if (syncTags) syncTags(st, performance.now());
-    if (syncLens) syncLens(st);
     syncResidents(st);
+    /* After the people, so a lens problem cannot skip placing them. */
+    if (syncLens) syncLens(st);
     syncWeather(st);
     /* who is at home may have changed; the windows are painted here at
      * the hour the last frame drew, and the next frame moves them on if
