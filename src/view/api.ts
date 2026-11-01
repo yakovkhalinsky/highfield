@@ -17,6 +17,7 @@ import { PHASES } from "../sim/engine/residents.ts";
 import type { Ev } from "../sim/engine/events.ts";
 import { ROLE_GLYPH, WEATHER_GLYPH, dayLine, full, say } from "./render.ts";
 import type { RunState } from "./runner.ts";
+import { whyFor } from "../sim/engine/whyLog.ts";
 import { eventTags, storyOf } from "./tags.ts";
 
 /** The status line where Python names its models (llm.status_line).
@@ -100,6 +101,7 @@ export function snapshot(s: RunState) {
       needs: Object.fromEntries(Object.entries(r.needs).map(([k, v]) => [k, pyRound(v, 2)])),
       family: (hh?.members ?? []).filter((m) => m !== r.id && String(m) in w.residents),
       with: families.walkingWith(w, r),
+      why: whyFor(w, r.id),
     };
   });
   const fixtures = Object.entries(w.fixtures).map(([fid, f]) => ({

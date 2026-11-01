@@ -6,6 +6,7 @@
  */
 // @ts-expect-error — classic ES module in the visual fork, no .d.ts
 import { phaseByName, phaseView } from "../../page3d/estate/world/phase.js";
+import type { WhyView } from "../sim/engine/whyLog.ts";
 import { dateLine, dateShort } from "../sim/world.ts";
 
 export type PhaseState = {
@@ -99,6 +100,83 @@ const TAB_IDS: Record<(typeof TAB_ORDER)[number], string> = {
   chron: "tabChron", census: "tabCensus", watch: "tabWatch",
 };
 
+const WHY_ORDER = ["dawn", "morning", "afternoon", "evening", "night"];
+
+export interface WhyLine { phase: string; text: string }
+
+function placeWord(kind: string): string {
+  return kind.replace(/_/g, " ");
+}
+
+/** One line per phase that has a reason, the phase on the card first. */
+export function whyLines(
+  st: { viewPhase?: string; people?: unknown[] } | null | undefined,
+  selected: { kind?: string; id?: number } | null | undefined,
+): WhyLine[] {
+  if (!st || !selected || selected.kind !== "resident" || selected.id == null) return [];
+  const person = (st.people ?? []).find((p): p is { id?: number; why?: WhyView[] } => {
+    return !!p && typeof p === "object" && (p as { id?: unknown }).id === selected.id;
+  });
+  const rows = person?.why ?? [];
+  const focus = st.viewPhase ?? "";
+  const ordered = [...rows].sort((a, b) => {
+    if (a.phase === focus) return -1;
+    if (b.phase === focus) return 1;
+    const ia = WHY_ORDER.indexOf(a.phase);
+    const ib = WHY_ORDER.indexOf(b.phase);
+    return (ia < 0 ? WHY_ORDER.length : ia) - (ib < 0 ? WHY_ORDER.length : ib);
+  });
+  const out: WhyLine[] = [];
+  for (const row of ordered) {
+    const needs = row.ranked.slice(0, 3).join(", ");
+    let text = needs;
+    if (row.place) {
+      const named = placeWord(row.place);
+      const tail = row.met ? named : `${named}, not there yet`;
+      text = text ? `${text} → ${tail}` : tail;
+    }
+    const also = row.candidates.filter((c) => c && c !== row.place).slice(0, 2).map(placeWord);
+    if (also.length) text = text ? `${text} · also ${also.join(", ")}` : `also ${also.join(", ")}`;
+    if (text) out.push({ phase: row.phase, text });
+  }
+  return out;
+}
+
+/** Why lines under the vendored card rows. The card's own write replaces
+ *  its HTML; these rows are put back when that happens. */
+export function applyWhy(
+  st: { viewPhase?: string; people?: unknown[] } | null | undefined,
+  selected: unknown,
+): void {
+  if (typeof document === "undefined") return;
+  const rows = document.getElementById("cardRows");
+  if (!rows) return;
+  const sel = selected as { kind?: string; id?: number } | null | undefined;
+  const lines = whyLines(st, sel);
+  const sig = lines.map((l) => `${l.phase}\t${l.text}`).join("\n");
+  if (rows.dataset.hfWhy === sig && (sig === "" || rows.querySelector("[data-hf-why]"))) return;
+  for (const el of Array.from(rows.querySelectorAll("[data-hf-why]"))) el.remove();
+  rows.dataset.hfWhy = sig;
+  if (!lines.length) return;
+  const head = document.createElement("li");
+  head.className = "hd";
+  head.dataset.hfWhy = "1";
+  const ht = document.createElement("span");
+  ht.textContent = "why";
+  head.append(ht, document.createElement("span"));
+  rows.append(head);
+  for (const line of lines) {
+    const li = document.createElement("li");
+    li.dataset.hfWhy = "1";
+    const a = document.createElement("span");
+    a.textContent = line.phase;
+    const b = document.createElement("span");
+    b.textContent = line.text;
+    li.append(a, b);
+    rows.append(li);
+  }
+}
+
 /** Arrow keys move the feed tabs. Home/End jump to the ends. */
 export function nextTab(current: string, key: string): string | null {
   const i = TAB_ORDER.indexOf(current as (typeof TAB_ORDER)[number]);
@@ -129,6 +207,7 @@ function ensureA11y(): void {
     }
     #hf-story .changing { display: block; }
     #hf-story .fraying { display: block; color: #d7dbe0; margin-top: 2px; }
+    #cardRows li[data-hf-why] span { font-size: 12px; line-height: 1.35; }
     @media (prefers-reduced-motion: reduce) {
       #hf-story { transition: none; }
     }
@@ -184,7 +263,7 @@ function bindTabKeys(HUD: EstateHUD): void {
 /**
  * Patch EstateHUD in place: shared phaseView, clock-aware cards, calendar
  * date_line on the header, calendar labels in the days feed, a story line
- * above the totals, and keyboard focus on the feed tabs. Returns the
+ * above the totals, why-lines on the resident card, and keyboard focus on the feed tabs. Returns the
  * clock-phase getter used by cards.
  */
 export function installHudBridge(HUD: EstateHUD | undefined): { clockPhase: () => string | null } {
@@ -207,7 +286,12 @@ export function installHudBridge(HUD: EstateHUD | undefined): { clockPhase: () =
 
   if (HUD.card) {
     const inner = HUD.card.bind(HUD);
-    HUD.card = (st, selected) => inner(liveFrame(st, clockPhase) as PhaseState, selected);
+    HUD.card = (st, selected) => {
+      const frame = liveFrame(st, clockPhase) as PhaseState;
+      const open = inner(frame, selected);
+      applyWhy(frame, selected);
+      return open;
+    };
   }
 
   if (HUD.head) {
