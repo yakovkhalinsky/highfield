@@ -3,8 +3,8 @@
  * thread, the lock, the wall clock or the model.
  *
  * One `step()` is one day, in the Python runner's order: note where
- * everybody stood, tick, keep the events (400) and the day's book (64
- * days), then the watcher if it is due and the chronicle if a run of days
+ * everybody stood, tick, keep the events (400) and a year of day books
+ * (364), then the watcher if it is due and the chronicle if a run of days
  * is long enough. Pace — paused, a step, seconds a day — belongs to the
  * worker's timer, never to the estate: what happens on a day depends only
  * on the seed and the days before it.
@@ -59,7 +59,10 @@ export interface RunState {
  * events from these, so a stretch of more than this many would lose its
  * first; tests/chronicle.test.ts checks the seeds it runs stay well under. */
 export const KEEP_EVENTS = 400;
-export const KEEP_BOOKS = 64;
+/** One estate year (`days_per_season` × 4). IndexedDB keeps the books with
+ * the save; a year is enough to read a season cycle without storing the
+ * whole run. */
+export const KEEP_BOOKS = 364;
 export const KEEP_CHRONICLE = 40;
 
 export function plant(seed: number): RunState {

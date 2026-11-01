@@ -5,6 +5,10 @@
  * every seed's residents, households, fixtures and the chooser itself.
  *
  *   npm run balance -- [--seeds N] [--years N] [--fingerprint]
+ *   npm run balance -- --json sweep.json [--csv sweep.csv]
+ *
+ * `--json` and `--csv` write the same rows the gate prints (T2). `-` sends
+ * that file to stdout and skips the table. `--fingerprint` is unchanged.
  *
  * Instrumented as Python instruments it: residents.ts's HOOKS observe the
  * chooser (ranked needs) and the satisfier, and change nothing.
@@ -15,6 +19,7 @@
  * both sides, so no line depends on a Python set's PYTHONHASHSEED order.
  */
 import { createHash } from "node:crypto";
+import { writeFileSync } from "node:fs";
 import { byCodePoint } from "../src/py/canon.ts";
 import { floatRepr, pyRound } from "../src/py/num.ts";
 import { meanFloat, meanInts } from "../src/py/stats.ts";
@@ -129,6 +134,49 @@ export function fingerprint(rows: Row[]): string {
   return createHash("sha256").update(pyDumps(rows.map(toPy))).digest("hex").slice(0, 16);
 }
 
+/** One sweep row as flat fields. Census kinds follow the roster so a CSV
+ * header stays stable when a seed is missing a household type. */
+export function sweepRecord(r: Row): Record<string, number | string> {
+  const distinct = "int" in r.distinct ? r.distinct.int : r.distinct.float;
+  const census: Record<string, number> = {};
+  for (const kind of R.pop.roster) census[kind] = r.census[kind] ?? 0;
+  return {
+    seed: r.seed,
+    days: r.days,
+    residents: r.residents,
+    households: r.households,
+    occupancy: r.occupancy,
+    emptiest_block: r.emptiest_block,
+    friction: r.friction,
+    distinct,
+    worn: r.worn.join("|"),
+    unused_fixture: r.unused_fixture.join("|"),
+    all_broken: r.all_broken.join("|"),
+    ...census,
+  };
+}
+
+export function sweepsToJson(rows: Row[]): string {
+  return JSON.stringify(rows.map(sweepRecord), null, 2) + "\n";
+}
+
+function csvCell(v: number | string): string {
+  const s = String(v);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+export function sweepsToCsv(rows: Row[]): string {
+  const records = rows.map(sweepRecord);
+  const header = records.length ? Object.keys(records[0]!) : Object.keys(sweepRecord({
+    seed: 0, days: 0, census: {}, residents: 0, households: 0,
+    occupancy: 0, emptiest_block: 0, unused_fixture: [], all_broken: [],
+    friction: 0, distinct: { int: 0 }, worn: [],
+  }));
+  const lines = [header.join(",")];
+  for (const rec of records) lines.push(header.map((k) => csvCell(rec[k] ?? "")).join(","));
+  return lines.join("\n") + "\n";
+}
+
 /** The gate's laws, as balance.py names them. */
 export function gate(r: Row): string[] {
   const g = R.gate, bad: string[] = [];
@@ -158,13 +206,34 @@ function main(): void {
   };
   const seeds = opt("--seeds") ?? R.gate.seeds;
   const years = opt("--years") ?? R.gate.years;
+  const fileOpt = (flag: string): string | null => {
+    const i = argv.indexOf(flag);
+    if (i < 0) return null;
+    const path = argv[i + 1];
+    if (!path || path.startsWith("--")) { console.error(`${flag} wants a path, or - for stdout`); process.exit(2); }
+    return path;
+  };
+  const jsonPath = fileOpt("--json");
+  const csvPath = fileOpt("--csv");
   const rows: Row[] = [];
   for (let seed = 1; seed <= seeds; seed++) {
     const t0 = performance.now();
     rows.push(runOne(seed, years));
-    if (!argv.includes("--fingerprint")) console.error(`seed ${seed}: ${((performance.now() - t0) / 1000).toFixed(1)}s`);
+    if (!argv.includes("--fingerprint") && jsonPath !== "-" && csvPath !== "-") {
+      console.error(`seed ${seed}: ${((performance.now() - t0) / 1000).toFixed(1)}s`);
+    }
   }
   if (argv.includes("--fingerprint")) { console.log(fingerprint(rows)); return; }
+  const writeOut = (path: string, body: string) => {
+    if (path === "-") process.stdout.write(body);
+    else writeFileSync(path, body);
+  };
+  if (jsonPath) writeOut(jsonPath, sweepsToJson(rows));
+  if (csvPath) writeOut(csvPath, sweepsToCsv(rows));
+  if (jsonPath === "-" || csvPath === "-") {
+    if (rows.flatMap(gate).length) process.exit(1);
+    return;
+  }
   console.log(`${seeds} estates × ${years} years\n`);
   for (const r of rows) {
     const d = "int" in r.distinct ? r.distinct.int : r.distinct.float;
