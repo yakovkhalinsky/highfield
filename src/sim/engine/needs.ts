@@ -11,6 +11,7 @@ import type { Cand } from "./families.ts";
 import { ck, goTo, pos, reach, setOff, unitOf } from "./path.ts";
 import * as P from "./places.ts";
 import { wetness } from "./weather.ts";
+import { noteChoice, noteMet, noteRanked } from "./whyLog.ts";
 
 type Res = W.Resident;
 
@@ -101,6 +102,7 @@ function rankedNeedsBase(w: W.World, r: Res, phase: string): string[] {
 
 export function rankedNeeds(w: W.World, r: Res, phase: string): string[] {
   const out = rankedNeedsBase(w, r, phase);
+  noteRanked(w, r.id, phase, out);
   if (HOOKS.ranked) HOOKS.ranked(w, r, phase, out);
   return out;
 }
@@ -228,6 +230,7 @@ function satisfyBase(w: W.World, r: Res, c: Cand, need: string, phase: string): 
 }
 
 export function satisfy(w: W.World, r: Res, c: Cand, need: string, phase: string): void {
+  noteMet(w, r.id, phase, need, c.kind);
   if (HOOKS.satisfy) HOOKS.satisfy(w, r, c, need, phase);
   satisfyBase(w, r, c, need, phase);
 }
@@ -330,12 +333,18 @@ function choose(
   for (const [, need, p] of wants) {
     let best: Cand | null = null;
     let bestU: number | null = null;
+    const seen: string[] = [];
     for (const c of cand[need] ?? []) {
       if (!F.allows(w, lead, c, phase, minding, reachFn)) continue;
       const u = utility(w, p, c, need, phase, rng);
       if (u !== null && (bestU === null || u > bestU)) { best = c; bestU = u; }
+      /* Kinds already scored. Recording them does not draw another whim. */
+      if (u !== null && seen.length < 4 && !seen.includes(c.kind)) seen.push(c.kind);
     }
-    if (best !== null) return [best, need, p];
+    if (best !== null) {
+      noteChoice(w, p.id, phase, best.kind, need, seen);
+      return [best, need, p];
+    }
   }
   return [null, null, null];
 }
@@ -392,6 +401,7 @@ export function live(w: W.World, party: Res[], cand: Cands, phase: string, line:
   if (best === null && r.where.mode === "at" && F.curfew(w, r, phase, minding)) {
     [best, needOf] = homeOf(w, r, cand, phase);
     who = r;
+    if (best !== null && needOf) noteChoice(w, r.id, phase, "home", needOf, ["home"]);
   }
   if (best === null) {
     const full = R.engine.need_max! * R.engine.arrive_restore!;

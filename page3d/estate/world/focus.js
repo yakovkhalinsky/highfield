@@ -10,6 +10,18 @@ export function createFocus(kit) {
 
   /* -------------------------------------------------------------- pick */
 
+  /* A person standing against a block or a lamp is still the thing the
+   * pointer is on. The block's box often starts a little closer to the
+   * camera than the torso, so a resident wins unless the other hit is
+   * clearly in front of them. */
+  const PERSON_BIAS = 1.25;
+
+  function beats(dist, best) {
+    if (!best) return true;
+    const bias = best.hit.kind === "resident" ? PERSON_BIAS : 0;
+    return dist + bias < best.d;
+  }
+
   /* `withGround` is the click's privilege: a hover asks only what is on
    * top of the ground, while a click may also name the cell that was hit.
    * Raycasting every tile on every pointer move would be wasted work. */
@@ -44,7 +56,7 @@ export function createFocus(kit) {
       }
     }
     const bh = raycaster.intersectObjects(buildingBodies, false);
-    if (bh.length && (!best || bh[0].distance < best.d)) {
+    if (bh.length && beats(bh[0].distance, best)) {
       const id = bh[0].object.userData.pick.id;
       best = { d: bh[0].distance,
                hit: { kind: 'building', id, building: buildingById[id] } };
@@ -56,7 +68,7 @@ export function createFocus(kit) {
       let o = fh[0].object;
       while (o && !o.userData.pick) o = o.parent;
       const mark = o && o.userData.pick;
-      if (mark && (!best || fh[0].distance < best.d)) {
+      if (mark && beats(fh[0].distance, best)) {
         best = { d: fh[0].distance,
                  hit: { kind: 'fixture', id: mark.id,
                         fixture: fixtureById[mark.id] ||

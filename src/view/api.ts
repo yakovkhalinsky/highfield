@@ -17,6 +17,8 @@ import { PHASES } from "../sim/engine/residents.ts";
 import type { Ev } from "../sim/engine/events.ts";
 import { ROLE_GLYPH, WEATHER_GLYPH, dayLine, full, say } from "./render.ts";
 import type { RunState } from "./runner.ts";
+import { whyFor } from "../sim/engine/whyLog.ts";
+import { kinOf } from "./kin.ts";
 import { eventTags, storyOf } from "./tags.ts";
 
 /** The status line where Python names its models (llm.status_line).
@@ -85,7 +87,7 @@ export function dayFeed(w: W.World, events: Ev[], books: RunState["daybooks"], d
 export function snapshot(s: RunState) {
   const w = s.world;
   const day = w.day;
-  const people = Object.entries(w.residents).map(([rid, r]) => {
+  const listed = Object.entries(w.residents).map(([rid, r]) => {
     const wh = r.where;
     const [px, py, pmode, punit] = s.prev[rid] ?? [wh.x, wh.y, wh.mode, wh.unit ?? null];
     const hh = w.households[String(r.household)];
@@ -100,8 +102,10 @@ export function snapshot(s: RunState) {
       needs: Object.fromEntries(Object.entries(r.needs).map(([k, v]) => [k, pyRound(v, 2)])),
       family: (hh?.members ?? []).filter((m) => m !== r.id && String(m) in w.residents),
       with: families.walkingWith(w, r),
+      why: whyFor(w, r.id),
     };
   });
+  const people = listed.map((p) => ({ ...p, ...kinOf(listed, p) }));
   const fixtures = Object.entries(w.fixtures).map(([fid, f]) => ({
     id: Number(fid), kind: f.kind, x: f.x, y: f.y, c: pyRound(f.condition, 3),
     uses: f.use_total, stock: f.stock ?? null, cap: R.fixtures[f.kind]!.capacity ?? 0,

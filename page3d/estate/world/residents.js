@@ -732,10 +732,22 @@ export function createResidents(kit) {
 
       drawFigure(i, x, z, rootY, facing[i], s, _pose, d);
     }
+    /* Raycasts keep the first bounding sphere they see. A frame where
+     * everyone is indoors computes that sphere at the hidden pose
+     * (scale 0, under the ground) and then never lets go, so a person
+     * who has since come outside cannot be hovered or clicked. The
+     * sphere stays large enough for the whole estate instead. */
+    const reach = Math.hypot(kit.W, kit.H) + 80;
     [torsoMesh, thighLMesh, thighRMesh, shinLMesh, shinRMesh,
      footLMesh, footRMesh, armLMesh, armRMesh, forearmLMesh, forearmRMesh,
      headMesh, hairMesh, shadowMesh]
-      .forEach(m => { m.instanceMatrix.needsUpdate = true; });
+      .forEach(m => {
+        m.instanceMatrix.needsUpdate = true;
+        m.boundingBox = null;
+        if (!m.boundingSphere) m.boundingSphere = new THREE.Sphere();
+        m.boundingSphere.center.set(kit.W / 2, 0, kit.H / 2);
+        m.boundingSphere.radius = reach;
+      });
   }
 
   return { syncResidents, updateResidents, spaceResidents };
