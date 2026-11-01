@@ -7,6 +7,7 @@
 // @ts-expect-error — classic ES module in the visual fork, no .d.ts
 import { phaseByName, phaseView } from "../../page3d/estate/world/phase.js";
 import type { WhyView } from "../sim/engine/whyLog.ts";
+import { genderWord, type Gender } from "./kin.ts";
 import { dateLine, dateShort } from "../sim/world.ts";
 
 export type PhaseState = {
@@ -140,6 +141,74 @@ export function whyLines(
     if (text) out.push({ phase: row.phase, text });
   }
   return out;
+}
+
+export interface KinCard {
+  id?: number;
+  role?: string;
+  gender?: Gender | null;
+  parents?: string[];
+  children?: string[];
+}
+
+/** Gender, parents and children for the resident card. Empty when unknown. */
+export function kinLines(person: KinCard | null | undefined): { label: string; text: string }[] {
+  if (!person) return [];
+  const out: { label: string; text: string }[] = [];
+  const word = genderWord(person.gender ?? null, person.role);
+  if (word) out.push({ label: "gender", text: word });
+  if (person.parents?.length) out.push({ label: "parents", text: person.parents.join(", ") });
+  if (person.children?.length) out.push({ label: "children", text: person.children.join(", ") });
+  return out;
+}
+
+/** Gender beside the role, and parents or children with the household.
+ *  The vendored card rewrites its HTML; these nodes are put back after. */
+export function applyKin(
+  st: { people?: unknown[] } | null | undefined,
+  selected: unknown,
+): void {
+  if (typeof document === "undefined") return;
+  const rows = document.getElementById("cardRows");
+  const state = document.getElementById("cardState");
+  if (!rows || !state) return;
+  const sel = selected as { kind?: string; id?: number } | null | undefined;
+  const person = sel?.kind === "resident" && sel.id != null
+    ? (st?.people ?? []).find((p): p is KinCard => !!p && typeof p === "object" && (p as KinCard).id === sel.id)
+    : undefined;
+  const lines = kinLines(person);
+  const gender = lines.find((l) => l.label === "gender")?.text ?? "";
+  const kin = lines.filter((l) => l.label !== "gender");
+  const sig = `${gender}\n${kin.map((l) => `${l.label}\t${l.text}`).join("\n")}`;
+  const placed = !gender || !!state.querySelector("[data-hf-gender]");
+  const rowsOk = sig === "" || !!rows.querySelector("[data-hf-kin]");
+  if (rows.dataset.hfKin === sig && placed && rowsOk) return;
+  for (const el of Array.from(rows.querySelectorAll("[data-hf-kin]"))) el.remove();
+  state.querySelector("[data-hf-gender]")?.remove();
+  rows.dataset.hfKin = sig;
+  if (gender) {
+    const mark = document.createElement("span");
+    mark.dataset.hfGender = "1";
+    mark.textContent = ` · ${gender}`;
+    const br = state.querySelector("br");
+    if (br) state.insertBefore(mark, br);
+    else state.append(mark);
+  }
+  if (!kin.length) return;
+  const usually = Array.from(rows.querySelectorAll("li.hd")).find((el) =>
+    (el.textContent ?? "").trim().startsWith("usually"));
+  /* insertBefore the schedule would reverse the lines, so walk them backwards */
+  for (const line of usually ? [...kin].reverse() : kin) {
+    const li = document.createElement("li");
+    li.dataset.hfKin = "1";
+    const a = document.createElement("span");
+    a.textContent = line.label;
+    const b = document.createElement("span");
+    b.textContent = line.text;
+    li.append(a, b);
+    if (usually) rows.insertBefore(li, usually);
+    else rows.append(li);
+  }
 }
 
 /** Why lines under the vendored card rows. The card's own write replaces
@@ -289,6 +358,7 @@ export function installHudBridge(HUD: EstateHUD | undefined): { clockPhase: () =
     HUD.card = (st, selected) => {
       const frame = liveFrame(st, clockPhase) as PhaseState;
       const open = inner(frame, selected);
+      applyKin(frame, selected);
       applyWhy(frame, selected);
       return open;
     };
