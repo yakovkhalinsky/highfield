@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { canon, hash16, worldHash } from "../src/py/canon.ts";
 import { dayLine, full, say, commas } from "../src/view/render.ts";
-import { KEEP_EVENTS, plant, step } from "../src/view/runner.ts";
+import { KEEP_BOOKS, KEEP_EVENTS, plant, step } from "../src/view/runner.ts";
 import type { Ev } from "../src/sim/engine/events.ts";
 import { LLM_STATUS, MAX_QUEUED, SOURCE_TEXT, respond } from "../src/view/api.ts";
 import * as W from "../src/sim/world.ts";
@@ -118,6 +118,22 @@ describe("the event log's cap", () => {
   it("prunes to the last 400 events", () => {
     expect(s.events.length).toBe(KEEP_EVENTS);
     expect(s.events[0]!.kind).toBe("pad");
+  });
+});
+
+describe("a year of day books", () => {
+  it("keeps a book from inside the year and drops one from before it", () => {
+    expect(KEEP_BOOKS).toBe(364);
+    const s = plant(3);
+    s.daybooks[1] = { uses: {}, out: 0, noise: 0, broke: 0 };
+    s.daybooks[50] = { uses: {}, out: 0, noise: 0, broke: 0 };
+    s.world.day = 400;
+    step(s);
+    const day = s.world.day;
+    expect(s.daybooks[1]).toBeUndefined();
+    expect(s.daybooks[50]).toBeDefined();
+    expect(s.daybooks[day]).toBeDefined();
+    expect(day - 50).toBeLessThanOrEqual(KEEP_BOOKS);
   });
 });
 
