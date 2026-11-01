@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 // page3d JS modules have no .d.ts; the build still typechecks tests.
 // @ts-expect-error — no types for the visual-fork classic ES module
 import { phaseByName, phaseView } from "../page3d/estate/world/phase.js";
-import { installHudBridge, liveFrame, type EstateHUD, type PhaseState } from "../src/view/hudBridge.ts";
+import { installHudBridge, liveFrame, nextTab, storyLines, type EstateHUD, type PhaseState } from "../src/view/hudBridge.ts";
 
 const st = {
   day: 3,
@@ -70,5 +70,20 @@ describe("hudBridge", () => {
     HUD.card!(st, null);
     expect(seen!.viewPhase).toBe("morning");
     expect(seen!.people![0]).toMatchObject({ mode: "school" });
+  });
+
+  it("puts the change ahead of who is fraying", () => {
+    expect(storyLines({ story: { changing: "a storm crossed the estate", fraying: "no one is fraying" } }))
+      .toEqual(["a storm crossed the estate", "no one is fraying"]);
+    expect(storyLines({})).toEqual(["", ""]);
+  });
+
+  it("moves the feed tabs with the arrow keys", () => {
+    expect(nextTab("chron", "ArrowRight")).toBe("census");
+    expect(nextTab("watch", "ArrowRight")).toBe("chron");
+    expect(nextTab("census", "ArrowLeft")).toBe("chron");
+    expect(nextTab("chron", "End")).toBe("watch");
+    expect(nextTab("watch", "Home")).toBe("chron");
+    expect(nextTab("chron", "Enter")).toBeNull();
   });
 });

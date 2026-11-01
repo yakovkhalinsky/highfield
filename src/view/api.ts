@@ -17,6 +17,7 @@ import { PHASES } from "../sim/engine/residents.ts";
 import type { Ev } from "../sim/engine/events.ts";
 import { ROLE_GLYPH, WEATHER_GLYPH, dayLine, full, say } from "./render.ts";
 import type { RunState } from "./runner.ts";
+import { eventTags, storyOf } from "./tags.ts";
 
 /** The status line where Python names its models (llm.status_line).
  *  hud.js's voiceLine turns `tier X — …` into `AI off · …`. */
@@ -137,6 +138,8 @@ export function snapshot(s: RunState) {
     phases: book && book.day === day ? { day, order: [...PHASES], at: book.phases ?? {} } : null,
     shade, light, wear, puddle,
     events: s.events.slice(-60).map((e) => ({ ...e, say: say(e) })),
+    tags: eventTags(w, s.events),
+    story: storyOf(w, s.events),
     days: dayFeed(w, s.events, s.daybooks),
     watcher: { ...s.last_watch },
     chronicle: s.chronicle.slice(-8),
