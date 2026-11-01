@@ -38,6 +38,7 @@ import { createWeather } from './world/weather.js';
 import { createFocus } from './world/focus.js';
 import { phaseByName, phaseView } from './world/phase.js';
 import { createTags } from './world/tags.js';
+import { createLenses } from './world/lenses.js';
 
 /* The router is a classic script (`/3d/walk.js`) loaded before this module;
  * see walk.js beside it. If it ever fails to load, the page still draws
@@ -249,11 +250,12 @@ export function createWorld(ground, canvas, opts) {
   Object.assign(kit, createWeather(kit));
   Object.assign(kit, createFocus(kit));
   Object.assign(kit, createTags(kit));
+  Object.assign(kit, createLenses(kit));
 
   const {
     paintGround, paintWindows, buildGlow, updateSky,
     buildFixtures,     syncFixtures, syncResidents, updateResidents,
-    syncWeather, updateWeather, syncTags, fadeTags,
+    syncWeather, updateWeather, syncTags, fadeTags, syncLens,
     pick, focusBench, focusPerimeter, focusCell, routeStats,
     clothMat, pantsMat, headMat, hairMat, lampBulbMat, shopSignMat,
     glowMat, glow,
@@ -288,6 +290,7 @@ export function createWorld(ground, canvas, opts) {
     if (!kit.fixturesBuilt) buildFixtures(st);
     syncFixtures(st);
     if (syncTags) syncTags(st, performance.now());
+    if (syncLens) syncLens(st);
     syncResidents(st);
     syncWeather(st);
     /* who is at home may have changed; the windows are painted here at
